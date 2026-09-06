@@ -15,11 +15,17 @@ graded. So every step here either reads the file or writes something small
 beside it:
 
   probe        one ffprobe call, metadata only
-  thumbnail    ONE frame extracted, composed to 1280x720 with Pillow
+  analyse      the video handed to Gemini via the Files API, so the packaging
+               is based on what is actually ON SCREEN and not merely on a
+               transcript of the audio - which says nothing at all about
+               footage with no narration
   audio        a 48 kbps mono track - roughly 3 MB for a ten minute video
   transcript   that audio to Gemini, which returns timed segments
   captions     an .srt written from those segments
-  metadata     one more Gemini call for titles, description, tags, chapters
+  metadata     one Gemini call that WATCHES the video and writes the titles,
+               description, tags and chapters, and names the most striking
+               moment for the thumbnail
+  thumbnail    ONE frame extracted at that moment, composed to 1280x720
   publish      the ORIGINAL file uploaded byte for byte, then the thumbnail
                and the caption track attached to it afterwards
 
@@ -472,6 +478,67 @@ def transcribe(audio_path: Path, duration: float) -> List[Dict[str, Any]]:
     return segments
 
 
+# Files above this go to metadata on the transcript alone. The Files API will
+# take far larger, but every extra megabyte is upload time and processing time
+# on the critical path, and a creator watching a progress bar notices.
+_VIDEO_ANALYSIS_MAX_MB = 300
+# How long to wait for Gemini to finish processing an uploaded video before
+# giving up and using the transcript instead.
+_VIDEO_ANALYSIS_TIMEOUT = 180
+
+
+def upload_for_analysis(video_path: Path):
+    """Put the video in front of Gemini via the Files API.
+
+    This is what makes the packaging about the *video* rather than about a
+    transcript of its audio. A transcript cannot tell you the video is shot at
+    night, that there are three people in it, or that the interesting thing
+    happens on screen without anybody describing it - and for footage with no
+    narration at all, a transcript tells you nothing whatsoever.
+
+    Returns a handle to reference in a prompt, or None if anything goes wrong;
+    every caller falls back to transcript-only packaging.
+    """
+    size_mb = video_path.stat().st_size / (1024 * 1024)
+    if size_mb > _VIDEO_ANALYSIS_MAX_MB:
+        logger.info("Video is %.0f MB, over the %d MB analysis cap - packaging "
+                    "from the transcript instead.", size_mb, _VIDEO_ANALYSIS_MAX_MB)
+        return None
+    try:
+        client = _gemini_client()
+        handle = client.files.upload(file=str(video_path))
+        # An uploaded video is not usable until Gemini has processed it;
+        # referencing it too early fails with a bare permission error.
+        deadline = time.time() + _VIDEO_ANALYSIS_TIMEOUT
+        while getattr(handle.state, "name", str(handle.state)) == "PROCESSING":
+            if time.time() > deadline:
+                logger.warning("Gemini took over %ds to process the video; "
+                               "falling back to the transcript.", _VIDEO_ANALYSIS_TIMEOUT)
+                return None
+            time.sleep(2)
+            handle = client.files.get(name=handle.name)
+        if getattr(handle.state, "name", str(handle.state)) == "FAILED":
+            logger.warning("Gemini could not process the video; using the transcript.")
+            return None
+        logger.info("Video uploaded for analysis (%.1f MB).", size_mb)
+        return handle
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not send the video to Gemini (%s); using the transcript.", exc)
+        return None
+
+
+def discard_analysis(handle) -> None:
+    """Delete the uploaded copy. Gemini expires files after 48h anyway, but
+    leaving a creator's footage sitting on someone else's storage for two days
+    when we are finished with it is not a defensible default."""
+    if handle is None:
+        return
+    try:
+        _gemini_client().files.delete(name=handle.name)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Could not delete the uploaded analysis file: %s", exc)
+
+
 METADATA_SYSTEM = (
     "You are a YouTube packaging specialist. You write titles that state the "
     "specific thing the video delivers, descriptions that read like a person "
@@ -482,14 +549,22 @@ METADATA_SYSTEM = (
 
 
 def build_metadata(transcript_text: str, filename: str, duration: float,
-                   profile: Dict[str, Any]) -> Dict[str, Any]:
-    """Titles, description, tags, hashtags and chapters, in the channel's voice."""
+                   profile: Dict[str, Any], video_handle=None) -> Dict[str, Any]:
+    """Titles, description, tags, hashtags and chapters, in the channel's voice.
+
+    When `video_handle` is supplied the model **watches the video** and packages
+    from what it sees as well as what it hears. That matters for anything the
+    audio does not say out loud - the setting, who is on screen, what actually
+    happens - and it is the only thing that works at all for footage with no
+    narration. Without a handle it falls back to the transcript.
+    """
     from app.services.profiles_service import script_directives
 
     client = _gemini_client()
     fmt = profile.get("format", {})
     hashtags = ", ".join(fmt.get("hashtags") or ["#shorts"])
     excerpt = transcript_text[:8000] if transcript_text else "(no speech detected)"
+    watching = video_handle is not None
 
     prompt = f"""Package this video for YouTube.
 
@@ -498,6 +573,13 @@ def build_metadata(transcript_text: str, filename: str, duration: float,
 Source filename: {filename}
 Duration: {duration:.0f} seconds
 Channel hashtags to include: {hashtags}
+
+{"You have been given THE VIDEO ITSELF. Watch it. Base the packaging on what "
+ "actually happens on screen - the subject, the setting, the people, the "
+ "moment that earns attention - not only on the words. The transcript below "
+ "is supporting detail, not the source of truth."
+ if watching else
+ "You have the transcript only; no video was available."}
 
 Transcript:
 {excerpt}
@@ -511,16 +593,21 @@ Return JSON with exactly these keys:
   "tags": ["18-22 lowercase search terms a real viewer would type, no # prefix"],
   "hashtags": ["3-5 tags with the # prefix"],
   "chapters": [{{"time": "0:00", "label": "short chapter label"}}],
-  "summary": "one sentence describing what the video actually covers"
+  "summary": "one sentence describing what the video actually covers",
+  "visual_summary": "{"what is visibly happening on screen, in one sentence"
+                      if watching else "leave empty"}",
+  "thumbnail_moment_seconds": {"the timestamp of the single most visually "
+                               "striking moment, as a number" if watching else "null"}
 }}
 
 Rules:
 - Titles must describe THIS video. A title that would fit any video is a failure.
 - Only include chapters if the video is over 120 seconds and genuinely has
   sections. An empty list is the right answer for a short.
-- Never invent facts that are not in the transcript."""
+- Never invent facts that are neither visible in the video nor in the transcript."""
 
-    data = _gemini_json(client, prompt, METADATA_SYSTEM)
+    contents = [video_handle, prompt] if watching else prompt
+    data = _gemini_json(client, contents, METADATA_SYSTEM)
 
     titles = [t.strip() for t in (data.get("titles") or []) if str(t).strip()][:3]
     if not titles:
@@ -539,6 +626,12 @@ Rules:
         "hashtags": [str(h).strip() for h in (data.get("hashtags") or []) if str(h).strip()][:5],
         "chapters": data.get("chapters") or [],
         "summary": (data.get("summary") or "").strip(),
+        "visual_summary": (data.get("visual_summary") or "").strip(),
+        # The model's pick for the most striking moment. Used to seed the
+        # thumbnail search, so the frame is chosen for what is IN it rather
+        # than only for being in focus.
+        "thumbnail_moment": data.get("thumbnail_moment_seconds"),
+        "watched_video": bool(video_handle),
     }
 
 
@@ -640,8 +733,10 @@ def process(job: IngestJob, source: Path, options: Dict[str, Any]) -> Dict[str, 
         info = probe(source)
         duration = info["duration"] or 0.0
 
-        step("thumbnail", "Choosing a thumbnail frame", 15)
-        frame = pick_best_frame(source, workdir, duration)
+        # The video goes to Gemini FIRST, because the metadata call wants to
+        # watch it and the thumbnail wants the moment that call picks out.
+        step("analyse", "Sending the video to Gemini", 12)
+        video_handle = upload_for_analysis(source)
 
         segments: List[Dict[str, Any]] = []
         if info["has_audio"]:
@@ -658,15 +753,36 @@ def process(job: IngestJob, source: Path, options: Dict[str, Any]) -> Dict[str, 
 
         transcript_text = " ".join(s["text"] for s in segments)
 
-        step("metadata", "Writing the title, description and tags", 55)
-        metadata = build_metadata(transcript_text, job.filename, duration, profile)
+        step("metadata", "Watching the video and writing the packaging"
+             if video_handle else "Writing the title, description and tags", 55)
+        try:
+            metadata = build_metadata(transcript_text, job.filename, duration,
+                                      profile, video_handle)
+        finally:
+            discard_analysis(video_handle)
+
+        step("thumbnail", "Choosing a thumbnail frame", 62)
+        # Prefer the moment the model called out; fall back to sampling for
+        # sharpness. Combining both is what stops the thumbnail being a
+        # technically-sharp frame of nothing in particular.
+        frame = None
+        moment = metadata.get("thumbnail_moment")
+        if isinstance(moment, (int, float)) and 0 < float(moment) < duration:
+            frame = extract_frame(source, workdir / "moment.jpg", float(moment))
+            if frame and _sharpness(frame) < 12:
+                logger.info("Model's moment at %.1fs was too soft; sampling instead.", moment)
+                frame = None
+            elif frame:
+                logger.info("Thumbnail frame taken from the model's chosen moment (%.1fs).", moment)
+        if frame is None:
+            frame = pick_best_frame(source, workdir, duration)
         if options.get("title"):
             metadata["title"] = str(options["title"])[:100]
 
         srt = write_srt(segments, workdir / f"{stem}.srt")
 
         if frame:
-            step("thumbnail", "Composing the thumbnail", 65)
+            step("thumbnail", "Composing the thumbnail", 68)
             thumb = compose_thumbnail(frame, workdir / f"{stem}.jpg", metadata["title"])
         else:
             thumb = None
