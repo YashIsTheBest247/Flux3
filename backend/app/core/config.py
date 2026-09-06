@@ -425,7 +425,8 @@ class Settings(BaseSettings):
     FLUX_SECRET_KEY: str = Field(default="", env="FLUX_SECRET_KEY")
 
     # Public origin, used to build the OAuth redirect URI. Render injects
-    # RENDER_EXTERNAL_URL, so this is only needed on hosts that do not.
+    # RENDER_EXTERNAL_URL and Railway injects RAILWAY_PUBLIC_DOMAIN, so this
+    # is only needed on a host that advertises neither.
     PUBLIC_BASE_URL: str = Field(default="", env="PUBLIC_BASE_URL")
 
     # Content profile chosen in the dashboard. The profile decides which trend
@@ -446,11 +447,35 @@ class Settings(BaseSettings):
     # This only PREVENTS a spin-down; it cannot reverse one. Once the instance
     # is stopped nothing inside it runs, so an external pinger
     # (.github/workflows/keepalive.yml) is the primary defence and this is the
-    # backstop. Render injects RENDER_EXTERNAL_URL automatically.
+    # backstop. Render and Railway both advertise their own public URL, so
+    # neither needs this configured by hand.
     KEEPALIVE_ENABLED: bool = Field(default=True, env="KEEPALIVE_ENABLED")
     KEEPALIVE_MINUTES: float = Field(default=12.0, env="KEEPALIVE_MINUTES")
     KEEPALIVE_URL: str = Field(default="", env="KEEPALIVE_URL")
     RENDER_EXTERNAL_URL: str = Field(default="", env="RENDER_EXTERNAL_URL")
+    # Railway's equivalents. RAILWAY_PUBLIC_DOMAIN is a bare hostname with no
+    # scheme (flux-production.up.railway.app), which is why every reader below
+    # normalises before use. RAILWAY_STATIC_URL is the older name, kept so a
+    # project created before the rename still self-configures.
+    RAILWAY_PUBLIC_DOMAIN: str = Field(default="", env="RAILWAY_PUBLIC_DOMAIN")
+    RAILWAY_STATIC_URL: str = Field(default="", env="RAILWAY_STATIC_URL")
+
+    @property
+    def detected_host_url(self) -> str:
+        """Whatever the platform says this deployment is reachable at.
+
+        Checked in order of specificity: an explicit override first, then each
+        platform's injected variable. Keeping this in one place is what lets the
+        same image self-configure on Render and Railway without a per-host
+        branch anywhere else.
+        """
+        for candidate in (self.RENDER_EXTERNAL_URL,
+                          self.RAILWAY_PUBLIC_DOMAIN,
+                          self.RAILWAY_STATIC_URL):
+            value = (candidate or "").strip().rstrip("/")
+            if value:
+                return value if value.startswith(("http://", "https://")) else f"https://{value}"
+        return ""
 
     @property
     def public_base_url(self) -> str:
@@ -460,7 +485,7 @@ class Settings(BaseSettings):
         character - a trailing slash or a missing scheme is a redirect_uri_mismatch
         rather than a helpful error.
         """
-        base = (self.PUBLIC_BASE_URL or self.RENDER_EXTERNAL_URL or "").strip().rstrip("/")
+        base = (self.PUBLIC_BASE_URL or "").strip().rstrip("/") or self.detected_host_url
         if base and not base.startswith(("http://", "https://")):
             base = f"https://{base}"
         return base
@@ -473,7 +498,7 @@ class Settings(BaseSettings):
         Backblaze and YouTube on every request, and 120 of those a day is pure
         waste when all the ping has to do is arrive.
         """
-        base = (self.KEEPALIVE_URL or self.RENDER_EXTERNAL_URL or "").strip().rstrip("/")
+        base = (self.KEEPALIVE_URL or "").strip().rstrip("/") or self.detected_host_url
         if not base:
             return None
         if not base.startswith(("http://", "https://")):

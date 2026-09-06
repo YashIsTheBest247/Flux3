@@ -14,7 +14,8 @@
 #     60 days. It will email first.
 #
 # Setup: Settings -> Secrets and variables -> Actions -> New repository secret
-#   RENDER_URL = https://<your-service>.onrender.com   (no trailing slash)
+#   APP_URL = https://<your-app>.up.railway.app   (no trailing slash)
+# RENDER_URL is still honoured so an existing setup keeps working.
 name: keepalive
 
 on:
@@ -35,10 +36,11 @@ jobs:
     steps:
       - name: Ping /ping
         env:
-          RENDER_URL: ${{ secrets.RENDER_URL }}
+          # Either name works - the app is host-agnostic and so is this.
+          RENDER_URL: ${{ secrets.APP_URL || secrets.RENDER_URL }}
         run: |
           if [ -z "$RENDER_URL" ]; then
-            echo "::warning::RENDER_URL secret is not set — nothing to ping."
+            echo "::warning::Neither APP_URL nor RENDER_URL is set — nothing to ping."
             exit 0
           fi
           # --max-time 90 rather than the default: if the instance HAS gone to
