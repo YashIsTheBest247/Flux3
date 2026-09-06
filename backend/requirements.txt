@@ -11,9 +11,20 @@ google-genai
 beautifulsoup4
 requests
 
+# Trending pipeline (RSS monitoring + scheduling)
+feedparser
+APScheduler
+
+# YouTube Data API (auto-publishing)
+google-api-python-client
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+
 # Document Processing
 pymupdf
 python-pptx
+werkzeug
 
 # Video Processing
 opencv-python-headless

@@ -165,9 +165,43 @@ class VideoGenerationService:
             final_video_path = settings.STATIC_DIR / "videos" / video_filename
             final_video_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(temp_video_path, final_video_path)
-            
+
             logger.info(f"Video generation complete: {video_filename}")
-            
+
+            # Step 8: Auto-publish to YouTube (only when the user enabled it)
+            if request.publish_to_youtube:
+                self._publish_to_youtube(request, final_video_path)
+
         except Exception as e:
             logger.error(f"Video generation task failed: {str(e)}", exc_info=True)
             raise
+
+    def _publish_to_youtube(self, request: VideoGenerationRequest, video_path: Path):
+        """
+        Upload the finished video to YouTube. Failures here are logged but do not
+        fail the whole generation task — the video is already rendered and saved.
+        """
+        # Imported lazily so the rest of the pipeline runs even if the YouTube
+        # client libraries aren't installed.
+        from app.services.youtube_service import upload_video, YouTubeServiceError
+
+        try:
+            logger.info("Publishing video to YouTube...")
+            title = request.topic.strip()[:100]
+            description_parts = [f"{request.topic.strip()}\n"]
+            if request.key_points:
+                description_parts.append("In this video:")
+                description_parts.extend(f"- {point}" for point in request.key_points)
+            description_parts.append("\nGenerated with Flux.")
+            description = "\n".join(description_parts)
+
+            result = upload_video(
+                file_path=video_path,
+                title=title,
+                description=description,
+            )
+            logger.info(f"Published to YouTube: {result['url']}")
+        except YouTubeServiceError as e:
+            logger.error(f"YouTube publishing failed: {e}")
+        except Exception as e:  # noqa: BLE001
+            logger.error(f"Unexpected error while publishing to YouTube: {e}", exc_info=True)

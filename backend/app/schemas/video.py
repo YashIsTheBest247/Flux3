@@ -11,7 +11,11 @@ class VideoGenerationRequest(BaseModel):
     duration: int = Field(default=60, description="Duration in seconds", ge=10, le=300)
     key_points: List[str] = Field(default=[], description="Key points to cover in the video")
     style: str = Field(default="educational", description="Video style")
-    
+    publish_to_youtube: bool = Field(
+        default=False,
+        description="When true, the finished video is auto-published to YouTube (privacy: private)."
+    )
+
     class Config:
         json_schema_extra = {
             "example": {
@@ -22,7 +26,8 @@ class VideoGenerationRequest(BaseModel):
                     "Types of machine learning",
                     "Real-world applications"
                 ],
-                "style": "educational"
+                "style": "educational",
+                "publish_to_youtube": False
             }
         }
 
@@ -33,6 +38,7 @@ class VideoGenerationResponse(BaseModel):
     message: str
     video_path: Optional[str] = None
     video_filename: Optional[str] = None
+    youtube_url: Optional[str] = None
     error: Optional[str] = None
     
     class Config:

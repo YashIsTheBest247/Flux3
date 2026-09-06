@@ -75,6 +75,47 @@ class Settings(BaseSettings):
     
     # TTS settings
     TTS_LANG_CODE: str = Field(default="b", env="TTS_LANG_CODE")
+
+    # YouTube auto-publishing
+    # Privacy is forced to "private" for now (see YOUTUBE_PRIVACY_STATUS).
+    YOUTUBE_PRIVACY_STATUS: str = Field(default="private", env="YOUTUBE_PRIVACY_STATUS")
+    YOUTUBE_CATEGORY_ID: str = Field(default="27", env="YOUTUBE_CATEGORY_ID")  # 27 = Education
+    YOUTUBE_DEFAULT_TAGS: str = Field(default="education,flux,ai", env="YOUTUBE_DEFAULT_TAGS")
+    SECRETS_DIR: Optional[Path] = Field(default=None)
+    YOUTUBE_CLIENT_SECRET_FILE: Optional[Path] = Field(default=None)
+    YOUTUBE_TOKEN_FILE: Optional[Path] = Field(default=None)
+
+    @property
+    def youtube_tags_list(self) -> List[str]:
+        """Parse YOUTUBE_DEFAULT_TAGS into a list"""
+        return [tag.strip() for tag in self.YOUTUBE_DEFAULT_TAGS.split(",") if tag.strip()]
+
+    # Trending pipeline (Economic Times RSS -> rank -> short-form video)
+    # Disabled by default: enabling starts a background scheduler that consumes
+    # the Gemini quota and (optionally) uploads to YouTube unattended.
+    TRENDS_ENABLED: bool = Field(default=False, env="TRENDS_ENABLED")
+    TRENDS_FEED_URLS: str = Field(
+        default=(
+            "https://economictimes.indiatimes.com/rssfeedstopstories.cms,"
+            "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms,"
+            "https://economictimes.indiatimes.com/industry/rssfeeds/13352306.cms,"
+            "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms,"
+            "https://economictimes.indiatimes.com/tech/rssfeeds/13357270.cms"
+        ),
+        env="TRENDS_FEED_URLS",
+    )
+    TRENDS_INTERVAL_HOURS: float = Field(default=6.0, env="TRENDS_INTERVAL_HOURS")
+    TRENDS_TOP_N: int = Field(default=3, env="TRENDS_TOP_N")
+    TRENDS_VIDEO_DURATION: int = Field(default=60, env="TRENDS_VIDEO_DURATION")
+    TRENDS_MAX_AGE_HOURS: float = Field(default=24.0, env="TRENDS_MAX_AGE_HOURS")
+    TRENDS_AUTO_PUBLISH: bool = Field(default=False, env="TRENDS_AUTO_PUBLISH")
+    TRENDS_RUN_ON_STARTUP: bool = Field(default=False, env="TRENDS_RUN_ON_STARTUP")
+    TRENDS_STATE_FILE: Optional[Path] = Field(default=None)
+
+    @property
+    def trends_feed_urls_list(self) -> List[str]:
+        """Parse TRENDS_FEED_URLS into a list"""
+        return [url.strip() for url in self.TRENDS_FEED_URLS.split(",") if url.strip()]
     
     # Logging
     LOG_FILE: str = Field(default="app.log", env="LOG_FILE")
@@ -103,6 +144,20 @@ class Settings(BaseSettings):
 
         if self.RESOURCE_DIR is None:
             self.RESOURCE_DIR = self.BASE_DIR / "resources"
+
+        # Secrets (YouTube OAuth credentials)
+        if self.SECRETS_DIR is None:
+            self.SECRETS_DIR = self.BASE_DIR / "secrets"
+
+        if self.YOUTUBE_CLIENT_SECRET_FILE is None:
+            self.YOUTUBE_CLIENT_SECRET_FILE = self.SECRETS_DIR / "youtube_client_secret.json"
+
+        if self.YOUTUBE_TOKEN_FILE is None:
+            self.YOUTUBE_TOKEN_FILE = self.SECRETS_DIR / "youtube_token.json"
+
+        # Trending pipeline state (processed article links, for dedup)
+        if self.TRENDS_STATE_FILE is None:
+            self.TRENDS_STATE_FILE = self.RESOURCE_DIR / "trends_state.json"
         
         # Resource subdirectories
         if self.SCRIPT_DIR is None:

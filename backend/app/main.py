@@ -28,12 +28,17 @@ async def lifespan(app: FastAPI):
     """Application lifespan events"""
     logger.info("Starting FastAPI Video Generator...")
     logger.info(f"Environment: {settings.ENVIRONMENT}")
-    
+
     # Ensure required directories exist
     settings.ensure_directories()
-    
+
+    # Start the trending pipeline scheduler (no-op unless TRENDS_ENABLED=true)
+    from app.services.trends_scheduler import start_scheduler, shutdown_scheduler
+    start_scheduler()
+
     yield
-    
+
+    shutdown_scheduler()
     logger.info("Shutting down FastAPI Video Generator...")
 
 
