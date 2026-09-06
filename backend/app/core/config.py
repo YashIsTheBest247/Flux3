@@ -68,6 +68,12 @@ class Settings(BaseSettings):
     DEFAULT_VIDEO_DURATION: int = Field(default=60, env="DEFAULT_VIDEO_DURATION")
     DEFAULT_VIDEO_FPS: int = Field(default=24, env="DEFAULT_VIDEO_FPS")
     DEFAULT_CHUNK_SIZE: int = Field(default=10, env="DEFAULT_CHUNK_SIZE")
+    # Intro/outro lengths (seconds). Kept short so the total video tracks the
+    # user-selected duration instead of being dominated by bookends.
+    INTRO_SECONDS: float = Field(default=2.0, env="INTRO_SECONDS")
+    OUTRO_SECONDS: float = Field(default=2.0, env="OUTRO_SECONDS")
+    # Narration speaking rate (words/second) used to target script length.
+    WORDS_PER_SECOND: float = Field(default=2.5, env="WORDS_PER_SECOND")
     
     # Image settings - Pexels primary, Gemini fallback
     IMAGE_GEN_MODEL: str = Field(default="gemini-2.5-flash-image", env="IMAGE_GEN_MODEL")

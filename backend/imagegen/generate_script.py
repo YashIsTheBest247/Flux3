@@ -1,5 +1,6 @@
 import json
 import re
+import time
 import requests
 from bs4 import BeautifulSoup
 from typing import Dict, List, Optional
@@ -102,26 +103,38 @@ class VideoScriptGenerator:
             print(f"Error fetching web results: {e}")
             return ""
 
-    def _generate_content(self, prompt: str, system_prompt: str) -> str:
+    def _generate_content(self, prompt: str, system_prompt: str, max_retries: int = 4) -> str:
         """
-        Generate content using the Gemini API.
-        Returns clean JSON (response_mime_type) with enough output budget that the
-        segmented script (audio_script + visual_script) is not truncated.
+        Generate content using the Gemini API. Retries transient errors
+        (503/429/500/overloaded) with backoff so a brief spike doesn't kill a render.
+        Returns clean JSON with enough output budget to avoid truncation.
         """
-        try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_prompt,
-                    temperature=0.7,
-                    max_output_tokens=8192,
-                    response_mime_type="application/json",
-                ),
-            )
-            return response.text
-        except Exception as e:
-            raise RuntimeError(f"Gemini API call failed: {str(e)}")
+        transient_markers = ("503", "429", "500", "UNAVAILABLE", "overloaded", "high demand", "RESOURCE_EXHAUSTED")
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        system_instruction=system_prompt,
+                        temperature=0.7,
+                        max_output_tokens=8192,
+                        response_mime_type="application/json",
+                    ),
+                )
+                return response.text
+            except Exception as e:  # noqa: BLE001
+                last_error = e
+                msg = str(e)
+                is_transient = any(m in msg for m in transient_markers)
+                if is_transient and attempt < max_retries - 1:
+                    wait = 2 * (attempt + 1)
+                    print(f"Gemini transient error (attempt {attempt + 1}); retrying in {wait}s...")
+                    time.sleep(wait)
+                    continue
+                raise RuntimeError(f"Gemini API call failed: {msg}")
+        raise RuntimeError(f"Gemini API call failed after {max_retries} attempts: {last_error}")
 
     def _extract_json(self, raw_text: str) -> Dict:
         """
@@ -139,35 +152,49 @@ class VideoScriptGenerator:
             except Exception as e:
                 raise ValueError(f"JSON extraction failed: {str(e)}")
 
-    def generate_script(self, topic: str, duration: int = 60, key_points: Optional[List[str]] = None) -> Dict:
+    def generate_script(
+        self,
+        topic: str,
+        duration: int = 60,
+        key_points: Optional[List[str]] = None,
+        words_per_second: float = 2.5,
+    ) -> Dict:
         """
         Generate a video script based on the given topic, duration, and key points.
-        
+
         Args:
             topic (str): The topic of the video.
-            duration (int): The duration of the video in seconds (default: 60).
-            key_points (Optional[List[str]]): Optional list of key points to include in the script.
-        
+            duration (int): Target narration length in seconds (default: 60).
+            key_points (Optional[List[str]]): Optional key points to include.
+            words_per_second (float): Speaking rate used to target word count.
+
         Returns:
             Dict: A structured video script in JSON format.
         """
+        # The narration must fit the target duration. At ~words_per_second, that's
+        # roughly this many spoken words total — the strongest lever on length.
+        target_words = max(12, int(round(duration * words_per_second)))
+
         # Step 1: Fetch web context for the topic
         web_context = self._search_web(topic)
-        
+
         # Step 2: Generate the initial script outline
         initial_prompt = f"""Generate an initial video script outline for a {duration}-second video about: {topic}.
         Key Points: {key_points or 'Comprehensive coverage'}
         Additional Context: {web_context}
+        STRICT LENGTH: the spoken narration across all sections must total about {target_words} words
+        (the finished video is ~{duration} seconds at ~{words_per_second} words/second). Do not exceed it.
         Focus on the overall narrative and key sections, but do *not* include timestamps or detailed technical parameters yet."""
-        
+
         raw_initial_output = self._generate_content(initial_prompt, self.system_prompt_initial)
         initial_script = self._extract_json(raw_initial_output)
-        
+
         # Step 3: Segment the script into timestamped audio and visual segments
         segmentation_prompt = f"""
         Here is the initial script draft:
         {json.dumps(initial_script, indent=2)}
-        Now, segment this script into 5-10 second intervals, adding timestamps and all required audio/visual parameters. The total duration should be approximately {duration} seconds.
+        Now, segment this script into 5-10 second intervals, adding timestamps and all required audio/visual parameters.
+        The total spoken narration must be about {target_words} words so the video runs ~{duration} seconds. Keep it tight; do not pad.
         """
         
         raw_segmented_output = self._generate_content(segmentation_prompt, self.system_prompt_segmentation)

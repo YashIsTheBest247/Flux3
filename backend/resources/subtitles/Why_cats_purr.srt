@@ -1,0 +1,12 @@
+1
+00:00:02,000 --> 00:00:06,282
+Cats purr for many reasons. Often, it's a form of
+
+2
+00:00:06,282 --> 00:00:09,280
+communication, showing happiness or asking for attention.
+
+3
+00:00:09,280 --> 00:00:12,530
+They also purr to self-soothe when stressed or healing.
+

@@ -276,7 +276,9 @@ def create_video(
     output_file: Path,
     intro_image_path: Path,
     with_subtitles: bool = False,
-    fps: int = 24
+    fps: int = 24,
+    intro_duration: float = 2.0,
+    outro_duration: float = 2.0,
 ) -> bool:
     """
     Main function that creates the video.
@@ -330,7 +332,7 @@ def create_video(
     
     # Create intro clip
     topic = extract_topic_from_json(script_path)
-    intro_clip = create_intro_clip(intro_image_path, duration=5, topic=topic, font_path=font_path)
+    intro_clip = create_intro_clip(intro_image_path, duration=intro_duration, topic=topic, font_path=font_path)
     raw_clips.append(intro_clip)
     
     # Create video clips with audio
@@ -346,7 +348,7 @@ def create_video(
     
     # Create outro clip
     outro_text = "MADE BY TEAM FLUX"
-    outro_clip = create_intro_clip(intro_image_path, duration=5, topic=outro_text, font_path=font_path)
+    outro_clip = create_intro_clip(intro_image_path, duration=outro_duration, topic=outro_text, font_path=font_path)
     raw_clips.append(outro_clip)
     
     # Concatenate all clips
@@ -354,7 +356,7 @@ def create_video(
     
     # Add subtitles if requested
     if with_subtitles:
-        Start_duration = 5
+        Start_duration = intro_duration
         subtitle_clips = []
         chunk_size = 10
         for text, duration in zip(subtitles, audio_durations):
@@ -427,7 +429,8 @@ def create_complete_srt(
     script_folder: Path,
     audio_file_folder: Path,
     outfile_path: Path,
-    chunk_size: int = 10
+    chunk_size: int = 10,
+    intro_offset: float = 2.0,
 ) -> bool:
     """
     Creates a complete SRT file from script and audio files.
@@ -456,7 +459,7 @@ def create_complete_srt(
         
         audio_clips = [AudioFileClip(str(x)) for x in audio_files]
         subs = pysrt.SubRipFile()
-        start_time = 5  # Account for intro
+        start_time = intro_offset  # Account for intro
         n = 1
         
         for text, audio_clip in zip(script, audio_clips):

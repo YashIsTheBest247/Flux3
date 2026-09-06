@@ -134,12 +134,20 @@ class VideoGenerationService:
             self._clean_directory(settings.IMAGES_DIR)
             self._clean_directory(settings.AUDIO_DIR)
             
-            # Step 2: Generate script
-            logger.info("Generating script...")
+            # Step 2: Generate script.
+            # Target the narration to fill (selected duration - intro - outro) so
+            # the FINAL video length tracks the user's chosen duration.
+            overhead = settings.INTRO_SECONDS + settings.OUTRO_SECONDS
+            content_duration = max(5, int(round(request.duration - overhead)))
+            logger.info(
+                f"Generating script (target {content_duration}s narration "
+                f"for a {request.duration}s video)..."
+            )
             script = self.script_generator.generate_script(
                 topic=request.topic,
-                duration=request.duration,
-                key_points=request.key_points if request.key_points else None
+                duration=content_duration,
+                key_points=request.key_points if request.key_points else None,
+                words_per_second=settings.WORDS_PER_SECOND,
             )
             
             # Save script
@@ -184,7 +192,8 @@ class VideoGenerationService:
                 script_folder=script_path,
                 audio_file_folder=settings.AUDIO_DIR,
                 outfile_path=srt_path,
-                chunk_size=settings.DEFAULT_CHUNK_SIZE
+                chunk_size=settings.DEFAULT_CHUNK_SIZE,
+                intro_offset=settings.INTRO_SECONDS,
             )
             logger.info(f"Subtitles saved to: {srt_path}")
             
@@ -200,7 +209,9 @@ class VideoGenerationService:
                 output_file=temp_video_path,
                 intro_image_path=settings.INTRO_IMAGE_PATH,
                 with_subtitles=True,
-                fps=settings.DEFAULT_VIDEO_FPS
+                fps=settings.DEFAULT_VIDEO_FPS,
+                intro_duration=settings.INTRO_SECONDS,
+                outro_duration=settings.OUTRO_SECONDS,
             )
             
             # Step 7: Copy to static directory
