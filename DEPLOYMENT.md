@@ -1,6 +1,6 @@
 # Flux — Deployment
 
-**Live: https://YOUR-SERVICE.onrender.com**
+**Live: https://flux3-production.up.railway.app**
 
 Goal: one public URL that serves both the UI and the API, with every generated
 asset stored durably on **Backblaze B2**.
@@ -311,7 +311,7 @@ Still supported if you prefer it:
 ## 7. Verify the deployment
 
 ```bash
-curl https://YOUR-SERVICE.onrender.com/health
+curl https://flux3-production.up.railway.app/health
 ```
 
 ```jsonc
@@ -330,7 +330,7 @@ curl https://YOUR-SERVICE.onrender.com/health
   "keepalive": {
     "enabled": true,
     "running": true,          // false locally — there is no public URL to ping
-    "target": "https://YOUR-SERVICE.onrender.com/ping",
+    "target": "https://flux3-production.up.railway.app/ping",
     "interval_minutes": 12,
     "next_ping_at": "..."
   }

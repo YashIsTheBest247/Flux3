@@ -1,10 +1,10 @@
 # Flux — Creator Automation
 
-### ▶ **Live app: https://YOUR-SERVICE.onrender.com**
+### ▶ **Live app: https://flux3-production.up.railway.app**
 
-[Health / readiness](https://YOUR-SERVICE.onrender.com/health) ·
-[API docs](https://YOUR-SERVICE.onrender.com/docs) ·
-[Storage + Genblaze status](https://YOUR-SERVICE.onrender.com/api/v1/videos/storage)
+[Health / readiness](https://flux3-production.up.railway.app/health) ·
+[API docs](https://flux3-production.up.railway.app/docs) ·
+[Storage + Genblaze status](https://flux3-production.up.railway.app/api/v1/videos/storage)
 
 One URL serves both the UI and the API — the Docker image bundles the React SPA
 into FastAPI, so there is no separate frontend host and no CORS to configure.
@@ -29,30 +29,59 @@ Every render is still orchestrated and signed through the **[Genblaze](https://g
 
 ## Features
 
-- **Bring your own keys** — Gemini, Pexels, Unsplash and your YouTube OAuth client are entered in the dashboard, Fernet-encrypted, and stored in your own B2 bucket so they survive a redeploy. Secrets never come back out of the API: you get a four-character tail, enough to tell two keys apart
-- **Connect your own channel** — the full OAuth flow runs in the browser against *your* Google Cloud project. This deployment never holds a credential that can touch anyone else's account, and disconnecting revokes the token at Google rather than only forgetting it
-- **Six content profiles, or write your own** — the niche is data, not code. Sources, ranking weights, narrator voice, audience, hook style, things to never say, visual vocabulary, duration, category and schedule all live in one YAML file
-- **Five trend sources, merged and de-duplicated** — Google Trends, Reddit, Hacker News, YouTube's own most-popular chart and plain RSS, fetched concurrently. Cross-source overlap is the ranking signal, so a story appearing on Trends *and* Reddit *and* a news feed outranks one that appears once
-- **Bring-your-own-video ingest** — upload a finished file and get titles, description, tags, a 1280×720 thumbnail composed from your own footage, an `.srt` caption track and Shorts timestamps. Never re-encoded: a frame is extracted, the audio is transcribed, and the original bytes are what reach YouTube
-- **Automated pipeline** — scheduled multi-source scan → heuristic ranking → render → sign → store → publish
-- **Provenance on every render** — a canonical, SHA-256-bound **Genblaze manifest** recording provider, model and parameters for each stage; written to B2 *and* embedded into the MP4 container, so the file carries its own record wherever it goes
-- **Verifiable in the UI** — the library shows a verified shield per video; open **Provenance** to see the generation chain, per-artefact hashes and a live re-verification
-- **Durable media library on Backblaze B2** — MP4, thumbnail, captions, script and manifest all land in the bucket; playback runs off short-lived presigned URLs, so the bucket stays private and the library survives an ephemeral host
-- **Motion where it earns its keep** — the **opening** scenes use short **stock video clips**, because a viewer decides in the first second or two whether to keep watching. Clips are claimed by a sequential pass over the first scenes, so motion lands at the front rather than wherever a worker happened to finish. Each clip plays **once, at its natural length**, and the scene's own photograph holds the rest of the segment — looping a three-second clip across a twelve-second segment replayed it four times, which reads as a stutter and advertises that the shot is filler
-- **Two stock libraries, ranked by relevance** — **Pexels and Unsplash** are searched concurrently and the result whose own caption best matches the prompt wins. Neither API ever returns *nothing* — each returns its loosest match silently — so scoring across two pools is what keeps scenes on topic. Gemini image generation covers what neither library has
-- **Multi-provider generation via Genblaze** — narration through GMI Cloud/ElevenLabs/MiniMax, optional generative visuals; swapping model or provider is one env var
-- **Graceful degradation** — every stage has a fallback (video clip → stock photo → Gemini for visuals; cloud TTS → local Kokoro for narration), and the app boots and reports readiness even with nothing configured
-- **Fits the container it's given** — the render reads the cgroup memory limit and scales the number of video scenes to what the host can actually hold, because a render that gets OOM-killed produces nothing at all
-- **Gemini key rotation** — the free tier caps generation at 20 requests *per day per project*; extra keys in `GEMINI_API_KEYS` are rotated to automatically when one reports its daily quota exhausted
-- **Publishes on a fixed daily schedule** — set per profile (the markets profile uses 08:00/14:00/20:00 IST, the gaming one 12:00/21:00 Pacific), with the last run recorded in B2 so a redeploy resumes the schedule instead of restarting it
-- **One-click automation** — pick how many top stories to process, toggle auto-publish, hit *Run Automation*
-- **Live pipeline view** — the UI shows the **real** backend stage (Fetch → Trend → Script → Visuals → Narration → Subtitles → Assembly → Provenance → Backblaze B2 → Publish)
-- **Pluggable script LLM** — **Gemini** (free tier, thinking disabled for speed) or **Ollama** (local, unlimited)
-- **Subtitles** — auto-timed captions burned in, plus a sidecar `.srt`; font scales with resolution so nothing clips
-- **Duration-accurate** — output length tracks the requested duration via word-count targeting
-- **Vertical output** — default **480×854 (9:16)** for fast Shorts renders; bump to 720p/1080p via env
-- **YouTube publishing** — per-run or global, with **Unlisted / Public / Private** and `#Shorts` tagging
-- **Single public URL** — the Docker image bundles the SPA into the API, so there is one host and no CORS
+### Pick a channel, and everything follows
+
+- **Six content profiles** — Tech News, Markets & Money, Gaming, Fitness & Health, Entertainment, Science & Curiosity. Choosing one changes the trend sources scanned, the ranking weights, the narrator's voice, the visual vocabulary handed to the stock search, the YouTube category and the publish schedule. The pipeline underneath is identical
+- **The niche is data, not code** — a profile is one ~20-line YAML file in [`app/profiles/`](backend/app/profiles/). Adding a seventh is a file, not a commit to Python. Custom profiles built in the dashboard are stored in B2 and behave identically
+- **`persona.avoid` is a hard constraint, not decoration** — the fitness profile forbids medical advice and dosage, entertainment forbids gossip about private lives. Those lines reach the model as prohibitions, and they are the difference between a publishable video and one that should never have been made
+
+### Two ways in
+
+- **Automate the whole thing** — scheduled multi-source scan → ranking → script → visuals → narration → captions → assembly → provenance → B2 → publish. Unattended, on the active profile's own timetable
+- **Bring your own video** — upload a finished file and get three title options, a description with the hook in line one, ~20 search tags, hashtags, a 1280×720 thumbnail cut from your own footage, an `.srt` caption track and timestamps for the Shorts-worthy moments
+- **Uploaded video is never re-encoded** — one frame is extracted for the thumbnail, the audio is pulled at 48 kbps mono and transcribed, and the **original bytes** are what reach YouTube; the thumbnail and caption track are attached afterwards. Burning subtitles in would cost a full transcode and a memory peak a 512 MB instance cannot survive, and would degrade footage the creator already graded
+- **Thumbnails pick the sharpest frame** — five candidates are sampled across the middle of the video and scored for edge detail. A single frame at a fixed offset is a coin toss: on real footage, 25% in landed on a motion-blurred number plate and made it the thumbnail
+
+### Publishing is per-visitor
+
+- **Publishes to the deployment's channel by default** — a first-time visitor can try the whole pipeline without creating a Google Cloud project, which is the step most people would bounce off
+- **Or connect your own** — the full OAuth flow runs in the browser against *your* project, so uploads land on your channel and use your quota. In own-channel mode a missing token fails loudly rather than falling back — silently publishing a stranger's video to someone else's account is the worst failure available here
+- **Disconnecting revokes at Google**, not just locally
+- **Only the OAuth client is ever asked for** — model and stock-library keys come from the environment. They are the operator's cost centre and identical for every visitor, so a public form asking for them was pointless and invited someone to paste a key that then billed them
+- **Secrets never come back out** — the settings API returns whether a field is set and a four-character tail, enough to tell two keys apart and nothing more. Everything is Fernet-encrypted before it is written to B2, so it survives a redeploy on an ephemeral host
+
+### Finding something worth making
+
+- **Five trend sources, merged and de-duplicated** — Google Trends, Reddit, Hacker News, YouTube's own most-popular chart, and plain RSS, fetched concurrently. All public, free, documented endpoints, with a real User-Agent, per-source caps and a short cache
+- **Cross-source overlap is the ranking signal** — a story appearing on Trends *and* Reddit *and* a news feed outranks one that appears once. Reading five independent sources is what makes that evidence rather than five sections of one newspaper
+- **Duplicates are dropped by link and by normalised title** — the same story under five URLs would otherwise occupy all five top slots and produce five near-identical videos
+- **Per-source health in the UI** — "found nothing" and "Reddit is unreachable from this host" are different problems with different fixes, and the merged view hides which one you have
+
+### Provenance
+
+- **A signed manifest on every render** — a canonical, SHA-256-bound **Genblaze manifest** recording provider, model and parameters for each stage; written to B2 *and* embedded into the MP4, so the file carries its own record wherever it goes
+- **Verifiable in the UI** — the library shows a verified shield per video; **Provenance** opens the generation chain, per-artefact hashes and a live re-verification
+
+### Visuals and narration
+
+- **Two stock libraries, ranked by relevance** — Pexels and Unsplash are searched concurrently and the result whose own caption best matches the prompt wins. Neither API ever returns *nothing*; each returns its loosest match silently, so scoring across two pools is what keeps scenes on topic. Gemini image generation covers what neither has
+- **Motion where it earns its keep** — the opening scenes use short stock video clips, because a viewer decides in the first second or two. Each clip plays **once, at its natural length**, and the scene's own photograph holds the rest of the segment
+- **Graceful degradation everywhere** — video clip → stock photo → generated image; cloud TTS → Edge TTS → local Kokoro. The app boots and reports readiness with nothing configured at all
+- **Duration-accurate** and **vertical by default** — 480×854 (9:16), word-count targeted to the requested length
+
+### Running unattended
+
+- **Publishes on the active profile's schedule** — Tech News at 09:00/14:00/18:00 Eastern, Markets at 08:00/14:00/20:00 IST. The last run is recorded in B2, so a redeploy resumes the schedule instead of restarting it
+- **Fits the container it is given** — the render reads its own cgroup limit and scales the number of video scenes to what the host can actually hold. Below 768 MB it runs zero clips and uses photographs, because a render that gets OOM-killed produces nothing at all
+- **Stays awake** — the app pings its own public URL every 12 minutes, and [a GitHub Actions cron](.github/workflows/keepalive.yml) pings from outside. Both are needed: the self-ping prevents a spin-down, but only an external request can reverse one
+- **Gemini key rotation** — the free tier caps generation at 20 requests per day *per project*; extra keys are rotated to automatically when one reports its quota exhausted
+- **Portable** — the same image self-configures on **Render** ([render.yaml](render.yaml)) and **Railway** ([railway.json](railway.json)), detecting whichever public URL the platform advertises
+
+### The dashboard
+
+- **Live progress, not a spinner** — the real backend stage, a progress bar, a tick per finished step, a pulsing marker on the one running, and an elapsed clock. Transcription and the metadata call each sit for several seconds with no stage change, and without a clock that is indistinguishable from a hang
+- **One-click automation** — pick how many stories, toggle auto-publish, hit *Run Automation*
+- **Single public URL** — the Docker image bundles the SPA into FastAPI, so there is one host and no CORS
 
 ---
 
@@ -432,11 +461,13 @@ MP4. See [ARCHITECTURE.md](ARCHITECTURE.md#performance).
 
 ## Deployment
 
-Deployed on **Render** at
-[YOUR-SERVICE.onrender.com](https://YOUR-SERVICE.onrender.com), from the blueprint in
-[render.yaml](render.yaml). The root [Dockerfile](Dockerfile) builds the SPA and
-serves it from FastAPI, so a deploy is **one service, one public URL** — no CORS,
-nothing to wire together:
+Deployed on **Railway** at
+[flux3-production.up.railway.app](https://flux3-production.up.railway.app), from
+[railway.json](railway.json). The same image also runs on Render from
+[render.yaml](render.yaml) — it detects whichever public URL the platform
+advertises, so nothing is host-specific. The root [Dockerfile](Dockerfile) builds
+the SPA and serves it from FastAPI, so a deploy is **one service, one public
+URL** — no CORS, nothing to wire together:
 
 ```bash
 docker build -t flux .
