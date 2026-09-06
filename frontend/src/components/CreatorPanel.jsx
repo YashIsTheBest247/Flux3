@@ -197,7 +197,11 @@ export function CreatorPanel({ onGenerate, isGenerating }) {
                             disabled={isGenerating}
                             className="btn-light w-full py-4 text-base"
                         >
-                            {isGenerating ? 'Generating…' : 'Generate video'}
+                            {isGenerating
+                                ? 'Generating…'
+                                : form.format === 'podcast'
+                                  ? 'Generate podcast'
+                                  : 'Generate video'}
                         </button>
                         <p className="text-center text-xs text-faint">One render at a time</p>
                     </div>

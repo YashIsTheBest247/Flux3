@@ -8,7 +8,9 @@ import json
 import time
 import re
 import shutil
+import subprocess
 from pathlib import Path
+from typing import Optional
 from fastapi import BackgroundTasks
 
 from app.schemas.video import VideoGenerationRequest, VideoGenerationResponse
@@ -130,17 +132,24 @@ class VideoGenerationService:
             self.script_generator.save_script(script, str(script_path))
             logger.info(f"Script saved to: {script_path}")
             
-            # Step 3: Generate images
-            logger.info("Generating images...")
-            main_generate_images(
-                script_path=script_path,
-                images_output_path=settings.IMAGES_DIR,
-                gemini_api_key=settings.GEMINI_API_KEY,
-                pexels_api_key=settings.PEXELS_API_KEY,
-                delay_seconds=settings.IMAGE_GEN_DELAY,
-                gemini_model=settings.IMAGE_GEN_MODEL,
-                aspect_ratio=settings.IMAGE_ASPECT_RATIO,
-            )
+            # Step 3: Source images.
+            # Podcast = one cover image held for the whole episode.
+            # Video   = a distinct image per scene (Pexels -> Gemini fallback).
+            is_podcast = (request.style or "").lower() == "podcast"
+            if is_podcast:
+                logger.info("Generating podcast cover...")
+                self._generate_podcast_cover(script_path, settings.IMAGES_DIR)
+            else:
+                logger.info("Generating images...")
+                main_generate_images(
+                    script_path=script_path,
+                    images_output_path=settings.IMAGES_DIR,
+                    gemini_api_key=settings.GEMINI_API_KEY,
+                    pexels_api_key=settings.PEXELS_API_KEY,
+                    delay_seconds=settings.IMAGE_GEN_DELAY,
+                    gemini_model=settings.IMAGE_GEN_MODEL,
+                    aspect_ratio=settings.IMAGE_ASPECT_RATIO,
+                )
             logger.info("Images generated successfully")
             
             # Step 4: Generate audio
@@ -183,6 +192,9 @@ class VideoGenerationService:
             final_video_path.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(temp_video_path, final_video_path)
 
+            # Step 7b: Generate a thumbnail (poster) for the library
+            self._generate_thumbnail(final_video_path)
+
             logger.info(f"Video generation complete: {video_filename}")
 
             # Step 8: Auto-publish to YouTube when the per-render flag is set OR
@@ -193,6 +205,72 @@ class VideoGenerationService:
         except Exception as e:
             logger.error(f"Video generation task failed: {str(e)}", exc_info=True)
             raise
+
+    def _generate_podcast_cover(self, script_path: Path, images_dir: Path):
+        """
+        Podcast mode: source ONE cover image and hold it for every audio segment
+        (so the existing assembler produces a single-cover episode with subtitles).
+        """
+        from imagegen.gen_img import get_image_for_prompt, save_image
+
+        images_dir.mkdir(parents=True, exist_ok=True)
+        with open(script_path, "r", encoding="utf-8") as f:
+            script = json.load(f)
+
+        segments = script.get("audio_script", []) or []
+        count = max(1, len(segments))
+
+        # Prefer a real cover prompt; fall back to the topic.
+        visual = script.get("visual_script") or []
+        cover_prompt = (visual[0].get("prompt") if visual else None) or script.get("topic", "")
+
+        image_bytes = get_image_for_prompt(
+            cover_prompt,
+            pexels_api_key=settings.PEXELS_API_KEY,
+            gemini_api_key=settings.GEMINI_API_KEY,
+            aspect_ratio=settings.IMAGE_ASPECT_RATIO,
+            gemini_model=settings.IMAGE_GEN_MODEL,
+        )
+        if not image_bytes:
+            logger.warning("No cover image found for podcast; assembler will use a placeholder.")
+            return
+
+        # Save the cover once per segment so it stays on screen the whole episode.
+        for idx in range(count):
+            save_image(image_bytes, images_dir / f"scene_{idx:03d}.jpg")
+        logger.info(f"Podcast cover applied across {count} segment(s).")
+
+    def _generate_thumbnail(self, video_path: Path) -> Optional[Path]:
+        """
+        Extract a poster frame from the finished video (saved as <stem>.jpg next
+        to it). Falls back to the first scene image. Best-effort: never raises.
+        """
+        thumb_path = video_path.with_suffix(".jpg")
+        try:
+            import imageio_ffmpeg
+            ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+            # Grab a frame from the content (just after the ~5s intro).
+            subprocess.run(
+                [ffmpeg, "-y", "-ss", "6", "-i", str(video_path),
+                 "-frames:v", "1", "-q:v", "3", str(thumb_path)],
+                capture_output=True, timeout=60,
+            )
+            if thumb_path.exists() and thumb_path.stat().st_size > 0:
+                logger.info(f"Thumbnail saved: {thumb_path.name}")
+                return thumb_path
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"ffmpeg thumbnail failed ({e}); trying scene image fallback.")
+
+        # Fallback: use the first generated scene image.
+        try:
+            images = sorted(settings.IMAGES_DIR.glob("*.jpg")) + sorted(settings.IMAGES_DIR.glob("*.png"))
+            if images:
+                shutil.copy(images[0], thumb_path)
+                logger.info(f"Thumbnail (fallback) saved: {thumb_path.name}")
+                return thumb_path
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"Thumbnail fallback failed: {e}")
+        return None
 
     def _publish_to_youtube(self, request: VideoGenerationRequest, video_path: Path):
         """

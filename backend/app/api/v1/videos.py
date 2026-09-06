@@ -59,11 +59,19 @@ async def list_videos():
         videos = []
         for filename in os.listdir(video_dir):
             if filename.lower().endswith(('.mp4', '.webm', '.ogg', '.mov', '.avi')):
+                stem = os.path.splitext(filename)[0]
+                thumb_name = f"{stem}.jpg"
+                thumbnail = (
+                    f"/static/videos/{thumb_name}"
+                    if (video_dir / thumb_name).exists()
+                    else None
+                )
                 videos.append(VideoListResponse(
                     name=filename,
-                    path=f"/static/videos/{filename}"
+                    path=f"/static/videos/{filename}",
+                    thumbnail=thumbnail,
                 ))
-        
+
         return videos
         
     except Exception as e:

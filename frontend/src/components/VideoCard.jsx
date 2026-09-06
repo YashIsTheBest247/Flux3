@@ -5,6 +5,7 @@ export function VideoCard({ index, video, isNew }) {
     const number = String(index + 1).padStart(2, '0');
     const title = titleFromFilename(video.name);
     const src = mediaUrl(video.path);
+    const poster = video.thumbnail ? mediaUrl(video.thumbnail) : undefined;
 
     return (
         <article className="group glass overflow-hidden transition-all hover:border-tint/20">
@@ -20,8 +21,14 @@ export function VideoCard({ index, video, isNew }) {
                 </div>
             </div>
 
-            <div className="mt-4 aspect-video w-full overflow-hidden bg-black/40">
-                <video controls preload="metadata" src={src} className="h-full w-full object-cover">
+            <div className="mt-4 aspect-[3/4] w-full overflow-hidden bg-black/40">
+                <video
+                    controls
+                    preload="metadata"
+                    src={src}
+                    poster={poster}
+                    className="h-full w-full object-contain"
+                >
                     Your browser does not support embedded video.
                 </video>
             </div>

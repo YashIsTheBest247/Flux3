@@ -60,6 +60,7 @@ class VideoListResponse(BaseModel):
     """Response model for video listing"""
     name: str
     path: str
+    thumbnail: Optional[str] = None
     
     class Config:
         json_schema_extra = {
