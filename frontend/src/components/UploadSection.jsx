@@ -5,8 +5,9 @@ import { ShortsPhone } from './Visuals.jsx';
 
 const STAGES = [
     { key: 'probe', label: 'Reading' },
+    { key: 'analyse', label: 'Sending to Gemini' },
     { key: 'transcribe', label: 'Transcribing' },
-    { key: 'metadata', label: 'Writing metadata' },
+    { key: 'metadata', label: 'Watching + writing' },
     { key: 'thumbnail', label: 'Thumbnail' },
     { key: 'clips', label: 'Finding clips' },
     { key: 'publish', label: 'Publishing' },
@@ -342,10 +343,10 @@ export function UploadSection({ youtubeReady }) {
                             <h3 className="display text-lg">What comes back</h3>
                             <ul className="mt-5 space-y-3 text-sm text-muted">
                                 {[
-                                    'Three title options, most specific first',
+                                    'Gemini watches the video, then three title options',
                                     'A description with the hook in the first line',
                                     'Around twenty search tags, plus hashtags',
-                                    'A 1280×720 thumbnail cut from your own footage',
+                                    'A 1280×720 thumbnail from the moment Gemini picks out',
                                     'An .srt caption track from your audio',
                                     'Timestamps for the best Shorts moments',
                                 ].map((item) => (
@@ -404,14 +405,7 @@ function ResultPanel({ result }) {
             <h3 className="display text-lg">Ready to use</h3>
 
             {result.published?.url ? (
-                <a
-                    href={result.published.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="btn-light mt-5 w-full"
-                >
-                    Open on YouTube
-                </a>
+                <PublishedLinks published={result.published} />
             ) : null}
 
             <div className="mt-6">
@@ -561,6 +555,56 @@ function StageMark({ done, current, failed }) {
         );
     }
     return <span className="h-4 w-4 shrink-0 rounded-full border border-tint/20" />;
+}
+
+/**
+ * Where to send someone after a successful upload.
+ *
+ * A PRIVATE video answers its public youtu.be URL with "Video unavailable" even
+ * for the account that owns it — which reads as a failed upload when the upload
+ * actually succeeded. So for private and unlisted the primary button goes to
+ * YouTube Studio, which always opens, and the visibility is stated outright.
+ */
+function PublishedLinks({ published }) {
+    const privacy = published.privacy || 'private';
+    const isPublic = privacy === 'public';
+    const studio = published.studio_url;
+
+    return (
+        <div className="mt-5">
+            <a
+                href={isPublic ? published.url : studio || published.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-light w-full"
+            >
+                {isPublic ? 'Open on YouTube' : 'Open in YouTube Studio'}
+            </a>
+
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="chip py-0.5 text-[0.65rem] capitalize">{privacy}</span>
+                {!isPublic ? (
+                    <a
+                        href={published.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-muted underline underline-offset-2 hover:text-txt"
+                    >
+                        Public link
+                    </a>
+                ) : null}
+            </div>
+
+            {!isPublic ? (
+                <p className="mt-2 text-xs leading-relaxed text-faint">
+                    It is uploaded and processed. A {privacy} video shows
+                    “Video unavailable” on the public link — that is YouTube
+                    hiding it, not a failed upload. Change the visibility in
+                    Studio to share it.
+                </p>
+            ) : null}
+        </div>
+    );
 }
 
 function Stat({ label, value }) {

@@ -12,7 +12,7 @@ import { ReelsMark, ShortsMark, YouTubeMark } from './Visuals.jsx';
  * it — a full word floating in the middle would read as a heading, whereas a
  * cropped one reads as print.
  */
-export function Hero({ onNavigate, profileName, channelTitle, channelUrl, publishMode }) {
+export function Hero({ onNavigate, profileName, channelTitle, channelUrl, publishMode, onReplayIntro }) {
     return (
         <section id="top" className="px-3 pt-3 sm:px-4 sm:pt-4">
             <div className="relative mx-auto w-full max-w-[1560px] overflow-hidden rounded-[1.5rem] bg-[#12100E] grain sm:rounded-[2rem]">
@@ -59,6 +59,24 @@ export function Hero({ onNavigate, profileName, channelTitle, channelUrl, publis
                         </div>
 
                         <div className="flex items-center gap-2">
+                            {/* Only offered where the intro would actually play —
+                                a Replay button for something that never ran on
+                                this device is worse than no button. */}
+                            {onReplayIntro ? (
+                                <button
+                                    type="button"
+                                    onClick={onReplayIntro}
+                                    title="Replay the intro"
+                                    className="hidden items-center gap-1.5 rounded-full border border-white/25 px-3.5 py-2 text-[0.62rem] font-medium uppercase tracking-[0.14em] text-white/75 transition-colors hover:border-white/50 hover:text-white lg:inline-flex"
+                                >
+                                    <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor"
+                                         strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                        <path d="M3 12a9 9 0 1 0 3-6.7" />
+                                        <path d="M3 4v5h5" />
+                                    </svg>
+                                    Replay intro
+                                </button>
+                            ) : null}
                             {/* Scoped dark so the toggle reads against the photo
                                 rather than inheriting the cream page palette. */}
                             <span className="dark hidden sm:block">

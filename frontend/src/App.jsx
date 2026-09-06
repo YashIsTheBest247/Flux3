@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Hero } from './components/Hero.jsx';
 import { ContentTypes } from './components/ContentTypes.jsx';
 import { Editorial } from './components/Editorial.jsx';
+import { IntroOverlay, introSupported, introUnseen } from './components/IntroOverlay.jsx';
 import { PublishingSection } from './components/PublishingSection.jsx';
 import { UploadSection } from './components/UploadSection.jsx';
 import { AutomationSection } from './components/AutomationSection.jsx';
@@ -44,6 +45,12 @@ export function App() {
     // Whose channel this is and what kind - read from /health so the hero and
     // the upload screen agree with the backend rather than guessing.
     const [readiness, setReadiness] = useState(null);
+    // Decided once, on mount, so the answer cannot change under the user
+    // mid-session (a rotated tablet must not suddenly start playing a film).
+    const [introPlaying, setIntroPlaying] = useState(
+        () => introSupported() && introUnseen(),
+    );
+    const canReplayIntro = introSupported();
 
     const pollTimerRef = useRef(null);
     const generatingRef = useRef(false);
@@ -299,6 +306,10 @@ export function App() {
 
     return (
         <div className="flex min-h-screen flex-col">
+            {/* Sits OVER the page rather than replacing it: the landing page is
+                already rendered and interactive the moment the intro leaves,
+                and a failed video costs nothing but a fade. */}
+            {introPlaying ? <IntroOverlay onDone={() => setIntroPlaying(false)} /> : null}
             <main className="flex-1">
                 <Hero
                     onNavigate={scrollToSection}
@@ -306,6 +317,7 @@ export function App() {
                     channelTitle={readiness?.youtube?.channel_title}
                     channelUrl={readiness?.youtube?.channel_url}
                     publishMode={readiness?.youtube?.mode}
+                    onReplayIntro={canReplayIntro ? () => setIntroPlaying(true) : null}
                 />
                 <Editorial
                     onNavigate={scrollToSection}

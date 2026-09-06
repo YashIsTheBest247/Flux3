@@ -261,8 +261,18 @@ def upload_video(
 
         video_id = response.get("id")
         url = f"https://youtu.be/{video_id}"
-        logger.info(f"YouTube upload complete: {url}")
-        return {"video_id": video_id, "url": url}
+        logger.info("YouTube upload complete: %s (privacy=%s)", url, privacy)
+        return {
+            "video_id": video_id,
+            "url": url,
+            # A PRIVATE video answers the public watch URL with "Video
+            # unavailable" even for its own owner, which reads as a failed
+            # upload when the upload in fact succeeded. Studio always opens it,
+            # so the caller can offer the right link for the visibility rather
+            # than one that looks broken.
+            "studio_url": f"https://studio.youtube.com/video/{video_id}/edit",
+            "privacy": privacy,
+        }
 
     except HttpError as exc:
         raise YouTubeServiceError(f"YouTube API error during upload: {exc}") from exc
