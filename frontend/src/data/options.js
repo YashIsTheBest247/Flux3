@@ -4,6 +4,7 @@ export const navLinks = [
     { id: 'top', label: 'Home' },
     { id: 'channel', label: 'Channel' },
     { id: 'publishing', label: 'Publishing' },
+    { id: 'create', label: 'Create' },
     { id: 'automation', label: 'Automate' },
     { id: 'upload', label: 'Upload' },
     { id: 'library', label: 'Library' },

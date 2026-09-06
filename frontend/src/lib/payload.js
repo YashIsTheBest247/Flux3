@@ -11,7 +11,12 @@ export function buildVideoPayload({ topic, duration, keyPoints, autoPublish, pri
         key_points: points,
         style: 'educational',
         publish_to_youtube: Boolean(autoPublish),
-        privacy_status: privacy === 'public' ? 'public' : 'unlisted',
+        // Pass the choice through. This used to collapse everything that was
+        // not 'public' to 'unlisted', so picking Private silently published an
+        // unlisted video instead.
+        privacy_status: ['private', 'unlisted', 'public'].includes(privacy)
+            ? privacy
+            : 'unlisted',
     };
 }
 

@@ -4,6 +4,7 @@ import { ContentTypes } from './components/ContentTypes.jsx';
 import { Editorial } from './components/Editorial.jsx';
 import { IntroOverlay, introSupported, introUnseen } from './components/IntroOverlay.jsx';
 import { PublishingSection } from './components/PublishingSection.jsx';
+import { TopicSection } from './components/TopicSection.jsx';
 import { UploadSection } from './components/UploadSection.jsx';
 import { AutomationSection } from './components/AutomationSection.jsx';
 import { PipelineSection } from './components/PipelineSection.jsx';
@@ -325,6 +326,12 @@ export function App() {
                 />
                 <ContentTypes onActivated={refreshReadiness} />
                 <PublishingSection onChanged={refreshReadiness} />
+                <TopicSection
+                    onGenerate={handleGenerate}
+                    isGenerating={isGenerating || isPolling}
+                    channelReady={Boolean(readiness?.youtube?.ready)}
+                    channelTitle={readiness?.youtube?.channel_title}
+                />
                 <AutomationSection
                     onGenerate={handleGenerateFromArticle}
                     onRunAutomation={handleRunAutomation}
