@@ -69,8 +69,9 @@ backend/resources/audio/*
 backend/resources/video/*
 !backend/resources/video/.gitkeep
 backend/resources/scripts/script.json
-backend/static/videos/*
-!backend/static/videos/.gitkeep
+# static/videos is NOT ignored: commit the videos (+ .jpg thumbnails) you want to
+# appear on the deployed site. They ship with the deploy and the Library lists them.
+backend/static/videos/*.log
 
 # Testing
 .pytest_cache/
