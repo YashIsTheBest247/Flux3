@@ -105,6 +105,8 @@ class VideoScriptGenerator:
     def _generate_content(self, prompt: str, system_prompt: str) -> str:
         """
         Generate content using the Gemini API.
+        Returns clean JSON (response_mime_type) with enough output budget that the
+        segmented script (audio_script + visual_script) is not truncated.
         """
         try:
             response = self.client.models.generate_content(
@@ -113,7 +115,8 @@ class VideoScriptGenerator:
                 config=types.GenerateContentConfig(
                     system_instruction=system_prompt,
                     temperature=0.7,
-                    max_output_tokens=2000,
+                    max_output_tokens=8192,
+                    response_mime_type="application/json",
                 ),
             )
             return response.text
@@ -169,10 +172,20 @@ class VideoScriptGenerator:
         
         raw_segmented_output = self._generate_content(segmentation_prompt, self.system_prompt_segmentation)
         segmented_script = self._extract_json(raw_segmented_output)
-        
+
         # Step 4: Add the topic to the segmented script
-        segmented_script['topic'] = initial_script['topic']
-        
+        segmented_script['topic'] = initial_script.get('topic', topic)
+
+        # Guard: the downstream audio/image steps require these keys. Fail loudly
+        # with context instead of silently saving a topic-only script.
+        if not segmented_script.get('audio_script'):
+            raise RuntimeError(
+                "Script generation did not produce an 'audio_script'. "
+                f"Parsed keys: {list(segmented_script.keys())}. "
+                "Raw model output (truncated): "
+                f"{raw_segmented_output[:500]}"
+            )
+
         return segmented_script
 
     def refine_script(self, existing_script: Dict, feedback: str) -> Dict:

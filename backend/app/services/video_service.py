@@ -205,18 +205,23 @@ class VideoGenerationService:
 
         try:
             logger.info("Publishing video to YouTube...")
-            title = request.topic.strip()[:100]
-            description_parts = [f"{request.topic.strip()}\n"]
+            # #Shorts in the title/description helps YouTube classify the
+            # (vertical, <=60s) video as a Short.
+            base_title = request.topic.strip()
+            title = f"{base_title} #Shorts"[:100]
+            description_parts = [f"{base_title}\n"]
             if request.key_points:
                 description_parts.append("In this video:")
                 description_parts.extend(f"- {point}" for point in request.key_points)
-            description_parts.append("\nGenerated with Flux.")
+            description_parts.append("\n#Shorts #shorts #viral")
             description = "\n".join(description_parts)
 
             result = upload_video(
                 file_path=video_path,
                 title=title,
                 description=description,
+                tags=settings.youtube_tags_list + ["shorts", "viral"],
+                privacy_status=request.privacy_status,
             )
             logger.info(f"Published to YouTube: {result['url']}")
         except YouTubeServiceError as e:

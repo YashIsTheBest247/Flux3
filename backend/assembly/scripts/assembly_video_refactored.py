@@ -12,6 +12,28 @@ from moviepy import ImageClip, concatenate_videoclips, AudioFileClip, TextClip, 
 import pysrt
 from PIL import Image, ImageDraw, ImageFont
 
+# Output resolution. Default is vertical 1080x1920 (9:16) for YouTube Shorts.
+# Overridable via env for landscape/other targets.
+TARGET_W = int(os.environ.get("FLUX_VIDEO_WIDTH", "1080"))
+TARGET_H = int(os.environ.get("FLUX_VIDEO_HEIGHT", "1920"))
+
+
+def fit_to_frame(clip, target_w: int = TARGET_W, target_h: int = TARGET_H):
+    """Scale a clip to COVER the target frame, then center-crop to exact size.
+
+    Keeps aspect ratio (no distortion) so mixed-size stock images all fill a
+    consistent vertical 9:16 frame.
+    """
+    cw, ch = clip.size
+    if not cw or not ch:
+        return clip
+    scale = max(target_w / cw, target_h / ch)
+    new_w, new_h = round(cw * scale), round(ch * scale)
+    clip = clip.resized((new_w, new_h))
+    x1 = max(0, (new_w - target_w) // 2)
+    y1 = max(0, (new_h - target_h) // 2)
+    return clip.cropped(x1=x1, y1=y1, width=target_w, height=target_h)
+
 
 def check_file_exists(file_path: Path) -> bool:
     """Check if a file exists at the specified path."""
@@ -154,38 +176,46 @@ def create_intro_clip(
     try:
         check_file_exists(background_image_path)
         
-        # Create background clip
-        background = ImageClip(str(background_image_path)).with_duration(duration)
-        
-        # Create text clip
+        # Create background clip, fitted to the target (vertical) frame
+        background = fit_to_frame(
+            ImageClip(str(background_image_path)).with_duration(duration)
+        )
+
+        # Create text clip (wrapped to the frame width, large for mobile)
         text_clip = TextClip(
             text=topic,
-            font_size=35,
+            font_size=72,
             color='white',
             font=str(font_path),
             stroke_color='black',
-            stroke_width=2
+            stroke_width=2,
+            method='caption',
+            size=(int(TARGET_W * 0.9), None),
+            text_align='center',
         )
-        
+
         # Set text position and duration
         text_clip = text_clip.with_position('center').with_duration(duration)
-        
+
         # Composite video clip
-        final_clip = CompositeVideoClip([background, text_clip])
-        
+        final_clip = CompositeVideoClip([background, text_clip], size=(TARGET_W, TARGET_H))
+
         return final_clip
     except Exception as e:
         print(f"Error creating intro clip: {e}")
         # Create a simple color clip as fallback
         from moviepy import ColorClip
-        fallback_clip = ColorClip(size=(1920, 1080), color=(0, 0, 0), duration=duration)
-        text_clip = TextClip(text=topic, font_size=30, color='white', font=str(font_path)).with_position('center').with_duration(duration)
-        return CompositeVideoClip([fallback_clip, text_clip])
+        fallback_clip = ColorClip(size=(TARGET_W, TARGET_H), color=(0, 0, 0), duration=duration)
+        text_clip = TextClip(
+            text=topic, font_size=60, color='white', font=str(font_path),
+            method='caption', size=(int(TARGET_W * 0.9), None), text_align='center',
+        ).with_position('center').with_duration(duration)
+        return CompositeVideoClip([fallback_clip, text_clip], size=(TARGET_W, TARGET_H))
 
 
 def create_placeholder_image(
-    width: int = 1920,
-    height: int = 1080,
+    width: int = TARGET_W,
+    height: int = TARGET_H,
     text: str = "No Image",
     font_path: Optional[Path] = None,
     font_size: int = 50,
@@ -306,7 +336,9 @@ def create_video(
     # Create video clips with audio
     for img, audio in zip(images, audio_files):
         audio_clip = AudioFileClip(str(audio))
-        image_clip = ImageClip(str(img)).with_duration(audio_clip.duration).with_audio(audio_clip)
+        image_clip = ImageClip(str(img)).with_duration(audio_clip.duration)
+        # Fit each scene image to the vertical 9:16 frame (cover + center-crop)
+        image_clip = fit_to_frame(image_clip).with_audio(audio_clip)
         audio_durations.append(audio_clip.duration)
         print(f"Video Clip no. {len(raw_clips)} successfully created")
         image_clip = add_effects(image_clip)
@@ -336,12 +368,12 @@ def create_video(
                         font=str(font_path),
                         color='white',
                         bg_color='black',
-                        size=(1280, 150),
-                        font_size=28,
+                        size=(int(TARGET_W * 0.92), 280),
+                        font_size=52,
                         method='caption',
                         text_align="center",
                         horizontal_align="center"
-                    ).with_duration(chunk_duration).with_start(Start_duration).with_position('bottom')
+                    ).with_duration(chunk_duration).with_start(Start_duration).with_position(('center', 0.72), relative=True)
                     subtitle_clips.append(subtitle_clip)
                     Start_duration += chunk_duration
             else:
@@ -355,11 +387,11 @@ def create_video(
                     method='caption',
                     text_align="center",
                     horizontal_align="center"
-                ).with_duration(duration).with_start(Start_duration).with_position('bottom')
+                ).with_duration(duration).with_start(Start_duration).with_position(('center', 0.72), relative=True)
                 subtitle_clips.append(subtitle_clip)
                 Start_duration += duration
         subtitle_clips.insert(0, video)
-        final_video = CompositeVideoClip(subtitle_clips)
+        final_video = CompositeVideoClip(subtitle_clips, size=(TARGET_W, TARGET_H))
     else:
         final_video = video
     

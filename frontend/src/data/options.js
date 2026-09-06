@@ -10,6 +10,11 @@ export const formatOptions = [
     { value: 'podcast', label: 'Podcast', hint: 'One cover + long-form audio' },
 ];
 
+export const privacyOptions = [
+    { value: 'unlisted', label: 'Unlisted', hint: 'Anyone with the link' },
+    { value: 'public', label: 'Public', hint: 'Listed & searchable' },
+];
+
 export const durationOptions = [
     { value: 15, label: '15s' },
     { value: 30, label: '30s' },

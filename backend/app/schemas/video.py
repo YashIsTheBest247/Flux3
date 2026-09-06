@@ -1,7 +1,7 @@
 """
 Video Generation Request/Response Models
 """
-from typing import List, Optional
+from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -13,7 +13,11 @@ class VideoGenerationRequest(BaseModel):
     style: str = Field(default="educational", description="Video style")
     publish_to_youtube: bool = Field(
         default=False,
-        description="When true, the finished video is auto-published to YouTube (privacy: private)."
+        description="When true, the finished video is auto-published to YouTube."
+    )
+    privacy_status: Literal["unlisted", "public", "private"] = Field(
+        default="unlisted",
+        description="YouTube visibility for the published video."
     )
 
     class Config:

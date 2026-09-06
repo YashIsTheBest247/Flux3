@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { durationOptions, formatOptions } from '../data/options.js';
+import { durationOptions, formatOptions, privacyOptions } from '../data/options.js';
 
 const initialForm = {
     format: 'video',
     topic: '',
     duration: 60,
     keyPoints: '',
-    autoPublish: false,
+    autoPublish: true,
+    privacy: 'unlisted',
 };
 
 export function CreatorPanel({ onGenerate, isGenerating }) {
@@ -136,7 +137,7 @@ export function CreatorPanel({ onGenerate, isGenerating }) {
                                 </span>
                                 <span className="text-xs text-muted">
                                     {form.autoPublish
-                                        ? 'Uploads as Private when the render finishes'
+                                        ? 'Uploads to YouTube when the render finishes'
                                         : 'Render stays in your library only'}
                                 </span>
                             </span>
@@ -153,6 +154,33 @@ export function CreatorPanel({ onGenerate, isGenerating }) {
                             </span>
                         </button>
                     </Field>
+
+                    {form.autoPublish && (
+                        <Field label="Visibility">
+                            <div className="grid grid-cols-2 gap-2">
+                                {privacyOptions.map((option) => {
+                                    const active = form.privacy === option.value;
+                                    return (
+                                        <button
+                                            key={option.value}
+                                            type="button"
+                                            onClick={() => update('privacy', option.value)}
+                                            className={`flex flex-col items-start gap-0.5 rounded-xl border px-4 py-3 text-left transition-all ${
+                                                active
+                                                    ? 'border-accent/40 bg-accent/10 text-txt'
+                                                    : 'border-tint/10 bg-tint/[0.03] text-muted hover:text-txt'
+                                            }`}
+                                        >
+                                            <span className="text-sm font-semibold text-txt">
+                                                {option.label}
+                                            </span>
+                                            <span className="text-xs text-muted">{option.hint}</span>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </Field>
+                    )}
 
                     <div className="mt-auto flex flex-col gap-3">
                         {error && (

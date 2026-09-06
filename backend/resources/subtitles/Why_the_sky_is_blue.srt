@@ -1,0 +1,24 @@
+1
+00:00:05,000 --> 00:00:08,150
+Ever wondered why our sky is a beautiful blue?
+
+2
+00:00:08,150 --> 00:00:12,209
+It's all about sunlight interacting with Earth's atmosphere. Our atmosphere
+
+3
+00:00:12,209 --> 00:00:16,268
+scatters shorter blue wavelengths of light much more than longer
+
+4
+00:00:16,268 --> 00:00:17,080
+red ones,
+
+5
+00:00:17,080 --> 00:00:21,148
+a phenomenon called Rayleigh scattering. This scattered blue light reaches
+
+6
+00:00:21,148 --> 00:00:24,810
+our eyes from all directions, painting our sky blue!
+
