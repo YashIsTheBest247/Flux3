@@ -153,6 +153,62 @@ def probe(video_path: Path) -> Dict[str, Any]:
     return info
 
 
+# Where to sample candidate frames from, as a fraction of the running time.
+# Nothing before 12% (intros, fades from black) or after 80% (outros, end cards).
+_FRAME_SAMPLES = (0.15, 0.30, 0.45, 0.60, 0.75)
+
+
+def pick_best_frame(video_path: Path, workdir: Path, duration: float) -> Optional[Path]:
+    """Sample several frames and keep the sharpest.
+
+    A single frame at a fixed offset is a coin toss: on a real edit, 25% in
+    landed on a motion-blurred stock clip of a number plate, which then became
+    the thumbnail. Sampling five points across the middle of the video and
+    scoring each for edge detail reliably avoids the blurred and near-empty
+    ones, because a frame with a subject in focus has far more edge energy than
+    a smeared or flat one.
+
+    Cheap: five keyframe seeks, and the scoring runs on a 320px copy.
+    """
+    candidates = []
+    for index, fraction in enumerate(_FRAME_SAMPLES):
+        at = duration * fraction
+        if at < 0.5:
+            continue
+        path = workdir / f"cand{index}.jpg"
+        if extract_frame(video_path, path, at):
+            score = _sharpness(path)
+            candidates.append((score, at, path))
+            logger.debug("frame candidate %.1fs -> sharpness %.1f", at, score)
+
+    if not candidates:
+        # Fall back to the old fixed offset rather than giving up on a thumbnail.
+        return extract_frame(video_path, workdir / "frame.jpg", max(1.0, duration * 0.25))
+
+    candidates.sort(key=lambda c: c[0], reverse=True)
+    best_score, best_at, best_path = candidates[0]
+    logger.info("Thumbnail frame chosen at %.1fs (sharpness %.1f of %d candidates).",
+                best_at, best_score, len(candidates))
+    return best_path
+
+
+def _sharpness(image_path: Path) -> float:
+    """Edge energy as a focus proxy. Higher is sharper; 0.0 if unreadable."""
+    try:
+        from PIL import Image, ImageFilter, ImageStat
+
+        with Image.open(image_path) as image:
+            small = image.convert("L")
+            small.thumbnail((320, 320))
+            edges = small.filter(ImageFilter.FIND_EDGES)
+            # Standard deviation of the edge map: a blurred or flat frame has
+            # its edge energy spread thin, a focused one has strong outliers.
+            return ImageStat.Stat(edges).stddev[0]
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Could not score %s: %s", image_path.name, exc)
+        return 0.0
+
+
 def extract_frame(video_path: Path, out_path: Path, at_seconds: float) -> Optional[Path]:
     """Pull a single frame. `-ss` before `-i` seeks by index rather than decoding
     up to the timestamp, which is the difference between instant and a minute."""
@@ -585,10 +641,7 @@ def process(job: IngestJob, source: Path, options: Dict[str, Any]) -> Dict[str, 
         duration = info["duration"] or 0.0
 
         step("thumbnail", "Choosing a thumbnail frame", 15)
-        # A quarter in. Frame zero is usually a fade from black, and the
-        # midpoint of a talking-head video is usually the same shot as any
-        # other - but 25% is reliably past the intro and inside the content.
-        frame = extract_frame(source, workdir / "frame.jpg", max(1.0, duration * 0.25))
+        frame = pick_best_frame(source, workdir, duration)
 
         segments: List[Dict[str, Any]] = []
         if info["has_audio"]:

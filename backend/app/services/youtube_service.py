@@ -62,13 +62,24 @@ def _load_credentials() -> Credentials:
 
     if token_json:
         try:
-            creds = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
+            info = json.loads(token_json)
         except Exception as exc:  # noqa: BLE001
             raise YouTubeServiceError(
                 f"YOUTUBE_TOKEN_JSON env var is not valid token JSON: {exc}"
             ) from exc
+        try:
+            # The token's OWN scopes, not the app's wish list. google-auth sends
+            # whatever scopes it is holding on the refresh request, and Google
+            # rejects a refresh that asks for scopes the grant never covered:
+            # a token issued for `youtube` failed with `invalid_scope` the
+            # moment this list was widened to upload+force-ssl. A refresh can
+            # never change a grant, so it must never try to.
+            creds = Credentials.from_authorized_user_info(info, info.get("scopes") or SCOPES)
+        except Exception as exc:  # noqa: BLE001
+            raise YouTubeServiceError(f"Stored YouTube token is unusable: {exc}") from exc
     elif token_file and token_file.exists():
-        creds = Credentials.from_authorized_user_file(str(token_file), SCOPES)
+        stored = json.loads(token_file.read_text(encoding="utf-8"))
+        creds = Credentials.from_authorized_user_info(stored, stored.get("scopes") or SCOPES)
     else:
         raise YouTubeServiceError(
             f"No YouTube credentials found. Set YOUTUBE_TOKEN_JSON, or create "
@@ -141,10 +152,30 @@ def readiness() -> dict:
             ),
         }
 
+    # A grant for plain `youtube` can upload and set a thumbnail but NOT insert
+    # a caption track - that needs force-ssl. Report it rather than letting the
+    # creator discover it as a silent missing-captions warning per upload.
+    granted = set()
+    try:
+        granted = set(json.loads(token_json).get("scopes") or [])
+    except Exception:  # noqa: BLE001
+        pass
+    can_caption = bool(granted & {
+        "https://www.googleapis.com/auth/youtube.force-ssl",
+        "https://www.googleapis.com/auth/youtubepartner",
+    })
+    if not can_caption and granted:
+        detail = (detail + " " if detail else "") + (
+            "This token predates caption support: uploads and thumbnails work, "
+            "but caption tracks need the youtube.force-ssl scope. Re-run "
+            "authorize_youtube.py to add it."
+        )
+
     return {
         "configured": True,
         "ready": True,
         "source": source,
+        "can_caption": can_caption,
         "mode": "own" if own_mode else "default",
         "channel_title": vault.get("YOUTUBE_CHANNEL_TITLE", "") if own_mode
                          else settings.YOUTUBE_DEFAULT_CHANNEL_TITLE,

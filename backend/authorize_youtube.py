@@ -33,7 +33,14 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
 # Full youtube scope (covers videos.insert). Must match what the app expects.
-SCOPES = ["https://www.googleapis.com/auth/youtube"]
+# Must match app/services/youtube_oauth.py. `youtube.upload` publishes the
+# video; `force-ssl` is what allows attaching a thumbnail and a caption track.
+# A token granted only the older, broader `youtube` scope uploads fine but
+# cannot insert captions.
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+]
 
 BASE_DIR = Path(__file__).resolve().parent
 CLIENT_SECRET_FILE = BASE_DIR / "secrets" / "youtube_client_secret.json"
