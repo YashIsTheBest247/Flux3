@@ -1,0 +1,12 @@
+1
+00:00:05,000 --> 00:00:08,930
+Today's a special day! A day filled with joy, laughter,
+
+2
+00:00:08,930 --> 00:00:12,530
+and the sweet taste of birthday cake. Happy Birthday!
+
+3
+00:00:12,530 --> 00:00:14,629
+May all your dreams come true.
+

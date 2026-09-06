@@ -1,0 +1,31 @@
+# FastAPI and ASGI Server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-multipart==0.0.6
+
+# Core Dependencies
+python-dotenv
+google-genai
+beautifulsoup4
+requests
+
+# Document Processing
+pymupdf
+python-pptx
+
+# Video Processing
+opencv-python-headless
+moviepy
+pysrt
+pillow
+
+# Audio/TTS
+soundfile
+kokoro
+misaki
+
+# ML/AI
+torch --index-url https://download.pytorch.org/whl/cpu
+transformers

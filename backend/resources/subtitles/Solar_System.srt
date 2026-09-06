@@ -1,0 +1,24 @@
+1
+00:00:05,000 --> 00:00:07,480
+Welcome to our solar system,
+
+2
+00:00:07,480 --> 00:00:10,660
+full of planets, comets, asteroids, and more!
+
+3
+00:00:10,660 --> 00:00:13,010
+Did you know there are eight planets?
+
+4
+00:00:13,010 --> 00:00:15,510
+They all circle around our sun.
+
+5
+00:00:15,510 --> 00:00:18,140
+So next time you look up at the sky,
+
+6
+00:00:18,140 --> 00:00:22,040
+remember, our solar system is a big, beautiful place!
+

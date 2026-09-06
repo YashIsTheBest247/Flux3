@@ -1,0 +1,84 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+/lib/
+/lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+venv310/
+.venv/
+ENV/
+env/
+
+# Node / Frontend
+node_modules/
+frontend/dist/
+frontend/dist-ssr/
+*.local
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+app_debug.log
+app.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project Specific
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/resources/images/*
+!backend/resources/images/.gitkeep
+backend/resources/audio/*
+!backend/resources/audio/.gitkeep
+backend/resources/video/*
+!backend/resources/video/.gitkeep
+backend/resources/scripts/script.json
+backend/static/videos/*
+!backend/static/videos/.gitkeep
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Docker
+*.pid
+*.seed
+*.pid.lock
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
