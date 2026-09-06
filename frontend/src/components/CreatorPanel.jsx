@@ -35,7 +35,7 @@ export function CreatorPanel({ onGenerate, isGenerating }) {
     }
 
     return (
-        <section id="creator" className="mx-auto max-w-7xl px-5 py-20 lg:px-8">
+        <section id="creator" className="mx-auto max-w-7xl px-5 py-12 lg:px-8">
             <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
                 <div>
                     <span className="eyebrow">Studio</span>
@@ -142,13 +142,17 @@ export function CreatorPanel({ onGenerate, isGenerating }) {
                                 </span>
                             </span>
                             <span
-                                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                                    form.autoPublish ? 'bg-accent' : 'bg-tint/20'
+                                className={`relative h-6 w-11 shrink-0 rounded-full border transition-colors ${
+                                    form.autoPublish
+                                        ? 'border-accent bg-accent'
+                                        : 'border-tint/25 bg-tint/15'
                                 }`}
                             >
                                 <span
-                                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
-                                        form.autoPublish ? 'translate-x-[22px]' : 'translate-x-0.5'
+                                    className={`absolute top-0.5 h-5 w-5 rounded-full shadow transition-transform ${
+                                        form.autoPublish
+                                            ? 'translate-x-[22px] bg-panel'
+                                            : 'translate-x-0.5 bg-txt'
                                     }`}
                                 />
                             </span>

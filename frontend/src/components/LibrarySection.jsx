@@ -21,7 +21,7 @@ export function LibrarySection({
     const showAwaiting = isGenerating || isPolling;
 
     return (
-        <section id="library" className="mx-auto max-w-7xl px-5 py-20 lg:px-8">
+        <section id="library" className="mx-auto max-w-7xl px-5 py-12 lg:px-8">
             <div className="mb-10 flex flex-wrap items-end justify-between gap-4">
                 <div>
                     <span className="eyebrow">Output</span>

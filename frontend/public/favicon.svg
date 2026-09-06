@@ -1,0 +1,22 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="16" y1="12" x2="50" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="1" stop-color="#9aa0aa"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="#0b0b0d"/>
+  <!-- automation loop: open ring centered at (32,32) r=15, gap upper-right -->
+  <path d="M46.5 28.1 A15 15 0 1 1 35.9 17.5"
+        fill="none" stroke="url(#g)" stroke-width="3.2" stroke-linecap="round"/>
+  <!-- arrowhead at the loop end (cycle direction) -->
+  <path d="M31.6 17.2 L37.2 15.4 L38.6 21.2 Z" fill="url(#g)"/>
+  <!-- play triangle (video) -->
+  <path d="M24 25.5 L33 32 L24 38.5 Z" fill="url(#g)"/>
+  <!-- audio waveform (podcast) -->
+  <g stroke="url(#g)" stroke-width="2.6" stroke-linecap="round">
+    <path d="M37 28.5 V35.5"/>
+    <path d="M41 25 V39"/>
+    <path d="M45 29.5 V34.5"/>
+  </g>
+</svg>

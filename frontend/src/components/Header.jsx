@@ -17,13 +17,24 @@ function YouTubeIcon({ className }) {
 function Logo() {
     return (
         <span className="grid h-9 w-9 place-items-center rounded-full border border-tint/15 bg-tint/[0.06] text-txt">
-            <svg viewBox="0 0 24 24" className="h-5 w-5">
-                <circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" strokeWidth="1.6" />
+            <svg viewBox="0 0 64 64" className="h-6 w-6" fill="none">
+                {/* automation loop */}
                 <path
-                    d="M14.5 5.5a7 7 0 1 0 0 13 5.6 5.6 0 0 1 0-13z"
-                    fill="currentColor"
+                    d="M46.5 28.1 A15 15 0 1 1 35.9 17.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3.2"
+                    strokeLinecap="round"
                 />
-                <circle cx="9" cy="12" r="1.3" fill="currentColor" />
+                <path d="M31.6 17.2 L37.2 15.4 L38.6 21.2 Z" fill="currentColor" />
+                {/* play triangle (video) */}
+                <path d="M24 25.5 L33 32 L24 38.5 Z" fill="currentColor" />
+                {/* audio waveform (podcast) */}
+                <g stroke="currentColor" strokeWidth="2.6" strokeLinecap="round">
+                    <path d="M37 28.5 V35.5" />
+                    <path d="M41 25 V39" />
+                    <path d="M45 29.5 V34.5" />
+                </g>
             </svg>
         </span>
     );
