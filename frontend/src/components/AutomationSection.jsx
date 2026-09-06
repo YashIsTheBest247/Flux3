@@ -109,9 +109,16 @@ export function AutomationSection({
         }
     }, []);
 
+    // Refetch whenever the ACTIVE PROFILE changes, not just on mount.
+    //
+    // This list is the active profile's story pool, but it used to load once and
+    // never again — so switching from Gaming to Fitness left the gaming stories
+    // on screen, and the panel looked like the picker did nothing. `profileName`
+    // arrives from /health after the switch, which is exactly the signal that
+    // the backend has moved.
     useEffect(() => {
         void load();
-    }, [load]);
+    }, [load, profileName]);
 
     // Show exactly the articles that will be processed. The list previously
     // rendered the whole fetched pool while the heading reported `count`, so the

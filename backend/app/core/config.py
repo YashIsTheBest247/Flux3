@@ -435,7 +435,7 @@ class Settings(BaseSettings):
 
     # Content profile chosen in the dashboard. The profile decides which trend
     # sources are scanned and how the script is written; see profiles_service.
-    CONTENT_PROFILE: str = Field(default="tech_news", env="CONTENT_PROFILE")
+    CONTENT_PROFILE: str = Field(default="finance", env="CONTENT_PROFILE")
 
     # Bring-your-own-video ingest ------------------------------------------
     # Capped because Render's disk is both small and ephemeral: the upload, the

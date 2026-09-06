@@ -101,7 +101,7 @@ services:
       # Which channel type the pipeline starts as. Changed in the dashboard
       # afterwards; the choice is stored in B2, so this is only the first boot.
       - key: CONTENT_PROFILE
-        value: tech_news
+        value: finance
       # Upload ceiling for bring-your-own-video. Render's disk is small and
       # ephemeral, and the upload plus its extracted frame and audio all live
       # there at once.
