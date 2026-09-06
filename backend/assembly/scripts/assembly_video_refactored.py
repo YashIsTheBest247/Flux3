@@ -12,10 +12,11 @@ from moviepy import ImageClip, concatenate_videoclips, AudioFileClip, TextClip, 
 import pysrt
 from PIL import Image, ImageDraw, ImageFont
 
-# Output resolution. Default is vertical 1080x1920 (9:16) for YouTube Shorts.
-# Overridable via env for landscape/other targets.
-TARGET_W = int(os.environ.get("FLUX_VIDEO_WIDTH", "1080"))
-TARGET_H = int(os.environ.get("FLUX_VIDEO_HEIGHT", "1920"))
+# Output resolution. Default is vertical 480p (480x854, 9:16) — fastest to encode
+# (~1 min renders), fine for Shorts/mobile. Bump to 720x1280 or 1080x1920 via
+# FLUX_VIDEO_WIDTH/HEIGHT for higher quality at the cost of render speed.
+TARGET_W = int(os.environ.get("FLUX_VIDEO_WIDTH", "480"))
+TARGET_H = int(os.environ.get("FLUX_VIDEO_HEIGHT", "854"))
 
 
 def fit_to_frame(clip, target_w: int = TARGET_W, target_h: int = TARGET_H):
@@ -397,10 +398,9 @@ def create_video(
     else:
         final_video = video
     
-    # Write video file.
-    # Keep threads low and use the fastest encode preset to bound peak memory/CPU
-    # on small instances (e.g. Render free tier). FLUX_FFMPEG_THREADS overrides.
-    ffmpeg_threads = int(os.environ.get("FLUX_FFMPEG_THREADS", "2"))
+    # Write video file. Use all CPU cores and the fastest preset for speed.
+    # On a memory-constrained host (e.g. Render free), set FLUX_FFMPEG_THREADS=2.
+    ffmpeg_threads = int(os.environ.get("FLUX_FFMPEG_THREADS", str(os.cpu_count() or 4)))
     ffmpeg_preset = os.environ.get("FLUX_FFMPEG_PRESET", "ultrafast")
     try:
         final_video.write_videofile(

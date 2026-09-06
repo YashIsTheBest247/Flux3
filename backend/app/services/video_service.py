@@ -39,6 +39,9 @@ class VideoGenerationService:
         self.script_generator = VideoScriptGenerator(
             api_key=settings.GEMINI_API_KEY,
             model=settings.GEMINI_TEXT_MODEL,
+            provider=settings.SCRIPT_PROVIDER,
+            ollama_model=settings.OLLAMA_MODEL,
+            ollama_base_url=settings.OLLAMA_BASE_URL,
         )
     
     def _clean_directory(self, folder_path: Path):

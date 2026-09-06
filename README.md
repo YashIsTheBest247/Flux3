@@ -11,15 +11,17 @@ Topic in → script, visuals, narration, subtitles, assembled MP4, thumbnail, an
 - **Two output modes**
   - **Video** — a distinct image per scene (Pexels stock → Gemini image fallback)
   - **Podcast** — a single themed cover image held over the full narration
-- **AI script generation** — Gemini writes a scene-by-scene script (narration + visual prompts)
-- **Stock + generated visuals** — Pexels is the primary image source; Gemini image generation is the fallback
-- **Text-to-speech** — narration via Kokoro TTS
+- **Pluggable script generation** — **Gemini** (free tier) or **Ollama** (local, free, unlimited)
+- **Stock + generated visuals** — Pexels primary, Gemini image generation fallback
+- **Text-to-speech** — narration via Kokoro TTS (local)
 - **Subtitles** — auto-timed captions burned into the video (+ a sidecar `.srt`)
-- **Vertical assembly** — composed to **1080×1920 (9:16)** for YouTube Shorts, with intro/outro
+- **Duration-accurate** — output length tracks the chosen duration (word-count targeting + short intro/outro)
+- **Vertical assembly** — default **480×854 (9:16)** for fast Shorts renders; bump to 720/1080 via env
 - **Thumbnails** — a poster frame is generated per render and shown in the library
-- **YouTube auto-publishing** — optional per render, with **Unlisted / Public / Private** visibility and `#Shorts` tagging
-- **Trending pipeline** — scheduled monitoring of Economic Times RSS, heuristic ranking, and auto-generation of the top N stories
-- **Web UI** — a studio to create renders, watch the live pipeline, and browse the output library
+- **YouTube auto-publishing** — per render or globally, with **Unlisted / Public / Private** visibility and `#Shorts` tagging
+- **Trending pipeline** — scheduled ET RSS monitoring, heuristic ranking, auto-generation of the top N
+- **Trending UI** — a live, animated section to browse ranked headlines and one-click "Generate video"
+- **Web UI** — studio to create renders, watch the live pipeline, browse/delete the library (animated confirm modal)
 
 ---
 
@@ -28,7 +30,8 @@ Topic in → script, visuals, narration, subtitles, assembled MP4, thumbnail, an
 ```
                           ┌──────────────────────────────┐
    Browser  ──────────▶   │  Frontend (React + Vite)      │
-                          │  studio · pipeline · library  │
+                          │  studio · trending · pipeline │
+                          │  · library                    │
                           └───────────────┬───────────────┘
                                            │  /api/v1  (Vite proxy in dev)
                                            ▼
@@ -36,37 +39,36 @@ Topic in → script, visuals, narration, subtitles, assembled MP4, thumbnail, an
                           │  Backend (FastAPI)            │
                           │                               │
    ET RSS feeds ─▶ Trends │  VideoGenerationService       │ ─▶ YouTube
-   (APScheduler)  service │   1. script   (Gemini)        │   (Data API)
-                          │   2. images   (Pexels→Gemini) │
+   (APScheduler)  service │   1. script  (Gemini|Ollama)  │   (Data API)
+                          │   2. images  (Pexels→Gemini)  │
                           │      └─ podcast: single cover │
-                          │   3. audio    (Kokoro TTS)    │
+                          │   3. audio   (Kokoro TTS)     │
                           │   4. subtitles                │
                           │   5. assemble (MoviePy 9:16)  │
                           │   6. thumbnail (ffmpeg)       │
-                          │   7. publish  (optional)      │
+                          │   7. publish (optional)       │
                           └──────────────────────────────┘
 ```
 
 ### Backend pipeline ([backend/app/services/video_service.py](backend/app/services/video_service.py))
-A render runs as a background task through these stages:
-1. **Script** — `imagegen/generate_script.py` (Gemini, JSON output: `audio_script` + `visual_script`)
-2. **Visuals** — `imagegen/gen_img.py` (Pexels → Gemini fallback). Podcast mode sources one cover and holds it across segments.
+A render runs as a background task, **serialized by a lock** (one render at a time — shared working dirs):
+1. **Script** — `imagegen/generate_script.py` — a single LLM call (Gemini or Ollama) returns JSON with `audio_script` + `visual_script`, length-targeted to the chosen duration
+2. **Visuals** — `imagegen/gen_img.py` (Pexels → Gemini fallback). Podcast mode sources one cover.
 3. **Audio** — `tts/generate_audio_refactored.py` (Kokoro)
-4. **Subtitles** — `assembly/scripts/assembly_video_refactored.py` (`create_complete_srt`)
-5. **Assembly** — MoviePy composes images + audio + captions into a 1080×1920 MP4 (`create_video`)
-6. **Thumbnail** — a poster frame is extracted via ffmpeg
+4. **Subtitles** — `assembly/scripts/assembly_video_refactored.py`
+5. **Assembly** — MoviePy composes images + audio + captions into a vertical MP4
+6. **Thumbnail** — poster frame via ffmpeg
 7. **Publish** — optional YouTube upload (`app/services/youtube_service.py`)
 
-> The heavy ML deps (torch, MoviePy, Kokoro) are **lazy-imported** inside the render task, so the API/health/trends endpoints stay lightweight at boot.
+> Heavy ML deps (torch, MoviePy, Kokoro) are **lazy-imported** inside the render task, so the API/health/trends endpoints stay light at boot.
 
-### Trending pipeline ([backend/app/services/trends_service.py](backend/app/services/trends_service.py), [trends_scheduler.py](backend/app/services/trends_scheduler.py))
-- Fetches the configured Economic Times RSS feeds (`feedparser`)
-- Ranks articles by `0.45·recency + 0.55·cross-feed keyword overlap` (free, deterministic; trending = the same story surfacing across feeds)
-- Skips stale and already-processed articles (dedup state in `resources/trends_state.json`)
-- An **APScheduler** background job auto-generates the top N on an interval (disabled by default)
+### Trending pipeline ([trends_service.py](backend/app/services/trends_service.py), [trends_scheduler.py](backend/app/services/trends_scheduler.py))
+- Fetches the configured ET RSS feeds (`feedparser`)
+- Ranks by `0.45·recency + 0.55·cross-feed keyword overlap`, skips stale/already-processed
+- An **APScheduler** job auto-generates the top N on an interval (disabled by default)
 
 ### Frontend ([frontend/](frontend/))
-React 19 + Vite + Tailwind. In dev, the Vite server proxies `/api` and `/static` to the backend; in production it talks to `VITE_API_BASE_URL`.
+React 19 + Vite + Tailwind. Dev proxies `/api` and `/static` to the backend; prod uses `VITE_API_BASE_URL`.
 
 ---
 
@@ -75,56 +77,31 @@ React 19 + Vite + Tailwind. In dev, the Vite server proxies `/api` and `/static`
 | Layer | Tech |
 |---|---|
 | Backend | FastAPI, Uvicorn, Pydantic |
-| AI / media | Google Gemini (`google-genai`), Pexels API, Kokoro TTS (torch), MoviePy + ffmpeg, Pillow, OpenCV |
+| Script LLM | Google Gemini (`google-genai`) **or** Ollama (local) |
+| Media | Pexels API, Kokoro TTS (torch), MoviePy + ffmpeg, Pillow, OpenCV |
 | Scheduling | APScheduler, feedparser |
 | Publishing | YouTube Data API (`google-api-python-client`, `google-auth`) |
 | Frontend | React 19, Vite, Tailwind CSS |
 
 ---
 
-## Project structure
-
-```
-Flux2-main/
-├── backend/
-│   ├── app/
-│   │   ├── main.py              # FastAPI app + lifespan (starts trends scheduler)
-│   │   ├── api/v1/              # videos, upload, trends routers
-│   │   ├── core/config.py       # settings (env-driven)
-│   │   ├── schemas/             # request/response models
-│   │   └── services/            # video, youtube, trends, trends_scheduler, document
-│   ├── imagegen/                # generate_script.py, gen_img.py
-│   ├── tts/                     # generate_audio_refactored.py (Kokoro)
-│   ├── assembly/                # assembly_video_refactored.py (MoviePy)
-│   ├── resources/              # generated scripts/images/audio/video/subtitles
-│   ├── static/videos/          # finished MP4s + thumbnails (served at /static)
-│   ├── secrets/                # YouTube OAuth client_secret + token (gitignored)
-│   ├── authorize_youtube.py    # one-time OAuth flow to mint secrets/youtube_token.json
-│   └── requirements.txt
-├── frontend/                    # React + Vite app
-├── render.yaml                  # Render blueprint (backend)
-├── DEPLOYMENT.md                # full deploy guide (Render + Vercel)
-└── README.md
-```
-
----
-
 ## Setup
 
-**Prerequisites:** Python **3.12** (the ML deps don't have wheels for 3.13+/3.14), Node 18+, and a [Gemini API key](https://aistudio.google.com/app/apikey). A [Pexels key](https://www.pexels.com/api/) is recommended.
+**Prerequisites:** Python **3.12** (ML deps lack wheels for 3.13+), Node 18+, a [Gemini API key](https://aistudio.google.com/app/apikey) (or Ollama), and ideally a [Pexels key](https://www.pexels.com/api/).
 
 ### Backend
 ```bash
 cd backend
-py -3.12 -m venv venv          # Windows;  python3.12 -m venv venv on macOS/Linux
-.\venv\Scripts\Activate.ps1    # source venv/bin/activate on macOS/Linux
+py -3.12 -m venv venv          # macOS/Linux: python3.12 -m venv venv
+.\venv\Scripts\Activate.ps1    # macOS/Linux: source venv/bin/activate
 pip install -r requirements.txt
 
-cp .env.example .env           # then fill in GEMINI_API_KEY (and PEXELS_API_KEY)
+cp .env.example .env           # fill in GEMINI_API_KEY (and PEXELS_API_KEY)
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-- Health: http://127.0.0.1:8000/health
-- API docs: http://127.0.0.1:8000/docs
+Health: http://127.0.0.1:8000/health · Docs: http://127.0.0.1:8000/docs
+
+> Run **without `--reload`** for real renders — `--reload` restarts (and kills an in-progress render) when watched files change.
 
 ### Frontend
 ```bash
@@ -132,18 +109,19 @@ cd frontend
 npm install
 npm run dev                     # http://localhost:5173
 ```
-The dev server proxies API/media calls to the backend automatically.
+
+### Script via Ollama (optional — free & unlimited, no API limits)
+1. Install Ollama: https://ollama.com/download
+2. `ollama pull llama3.2`  (or `llama3.1` for higher quality)
+3. In `backend/.env`: `SCRIPT_PROVIDER=ollama` (and `OLLAMA_MODEL=llama3.2`)
+4. Restart the backend — scripts now generate locally, using zero Gemini quota.
 
 ### YouTube publishing (optional)
 1. Put your OAuth **desktop** client at `backend/secrets/youtube_client_secret.json`.
-2. Run the one-time flow:
-   ```bash
-   cd backend && python authorize_youtube.py
-   ```
-   This opens a browser and writes `secrets/youtube_token.json`.
-3. Set the publish options (below). For unattended/headless deploys, paste the token JSON into `YOUTUBE_TOKEN_JSON`.
+2. `cd backend && python authorize_youtube.py` (opens a browser, writes `secrets/youtube_token.json`).
+3. For headless/deploys, paste the token JSON into `YOUTUBE_TOKEN_JSON`.
 
-> Tip: set your Google OAuth consent screen to **"In production"** so refresh tokens don't expire after 7 days.
+> Set the OAuth consent screen to **"In production"** so refresh tokens don't expire after 7 days.
 
 ---
 
@@ -151,25 +129,26 @@ The dev server proxies API/media calls to the backend automatically.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `GEMINI_API_KEY` | — | **Required.** Script + image fallback |
-| `PEXELS_API_KEY` | — | Primary image source (falls back to Gemini) |
-| `CORS_ORIGINS` | localhost dev origins | Allowed frontend origins |
-| `IMAGE_ASPECT_RATIO` | `1:1` | Use `9:16` for vertical Shorts |
-| `DEFAULT_VIDEO_FPS` | `24` | Output frame rate |
+| `GEMINI_API_KEY` | — | **Required.** Script (if provider=gemini) + image fallback |
+| `PEXELS_API_KEY` | — | Primary image source |
+| `CORS_ORIGINS` | localhost dev | Allowed frontend origins (no trailing slash) |
+| **Script provider** | | |
+| `SCRIPT_PROVIDER` | `gemini` | `gemini` or `ollama` |
+| `OLLAMA_MODEL` / `OLLAMA_BASE_URL` | `llama3.2` / `localhost:11434` | Ollama config |
+| **Video** | | |
+| `IMAGE_ASPECT_RATIO` | `1:1` | Use `9:16` for vertical Shorts images |
+| `FLUX_VIDEO_WIDTH` / `FLUX_VIDEO_HEIGHT` | `480` / `854` | Output resolution (720×1280 / 1080×1920 for higher quality) |
+| `FLUX_FFMPEG_THREADS` | all cores | Lower (e.g. `2`) on memory-constrained hosts |
+| `INTRO_SECONDS` / `OUTRO_SECONDS` | `2` / `2` | Bookend lengths |
 | **YouTube** | | |
-| `YOUTUBE_TOKEN_JSON` | — | Token JSON for headless deploys (overrides the file) |
-| `YOUTUBE_AUTO_UPLOAD` | `false` | Publish **every** render (else the UI toggle decides) |
+| `YOUTUBE_TOKEN_JSON` | — | Token JSON for headless deploys |
+| `YOUTUBE_AUTO_UPLOAD` | `false` | Publish every render (else the UI toggle decides) |
 | `YOUTUBE_PRIVACY_STATUS` | `private` | `private` / `unlisted` / `public` |
-| `YOUTUBE_CATEGORY_ID` | `27` | 27 = Education |
 | **Trending** | | |
-| `TRENDS_ENABLED` | `false` | Run the ET scheduler |
-| `TRENDS_AUTO_PUBLISH` | `false` | Auto-publish trending videos |
-| `TRENDS_INTERVAL_HOURS` | `6` | Run cadence |
-| `TRENDS_TOP_N` | `3` | Stories per run |
-| `TRENDS_FEED_URLS` | ET feeds | Comma-separated RSS URLs |
+| `TRENDS_ENABLED` / `TRENDS_AUTO_PUBLISH` | `false` | Run scheduler / auto-publish |
+| `TRENDS_INTERVAL_HOURS` / `TRENDS_TOP_N` | `6` / `3` | Cadence / stories per run |
 | **Frontend (Vercel)** | | |
 | `VITE_API_BASE_URL` | — | Backend URL in production (build-time) |
-| `VITE_FLUX_CHANNEL_URL` | fallback | Header channel link |
 
 See [backend/.env.example](backend/.env.example) for the full list.
 
@@ -183,11 +162,10 @@ Base path: `/api/v1`
 |---|---|---|
 | `POST` | `/videos/generate` | Start a render (`topic`, `duration`, `key_points`, `style`, `publish_to_youtube`, `privacy_status`) |
 | `GET` | `/videos/list` | List finished videos (+ thumbnails) |
-| `GET` | `/videos/download/{name}` | Download an MP4 |
-| `GET` | `/videos/stream/{name}` | Stream an MP4 |
+| `GET` | `/videos/download/{name}` · `/videos/stream/{name}` | Download / stream an MP4 |
+| `DELETE` | `/videos/{name}` | Delete a video + its thumbnail |
 | `POST` | `/upload/file` | Upload a source document |
-| `GET` | `/trends/status` | Scheduler status + last run |
-| `GET` | `/trends/preview` | Ranked trending articles (no generation) |
+| `GET` | `/trends/status` · `/trends/preview` | Scheduler status / ranked trending articles |
 | `POST` | `/trends/run` | Trigger one trending run now |
 | `GET` | `/health` | Health check |
 
@@ -195,15 +173,16 @@ Base path: `/api/v1`
 
 ## Deployment
 
-Backend → **Render** (via [render.yaml](render.yaml)), frontend → **Vercel** (via [frontend/vercel.json](frontend/vercel.json)). Full step-by-step guide in **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+Backend → **Render** ([render.yaml](render.yaml)), frontend → **Vercel** ([frontend/vercel.json](frontend/vercel.json)). Full guide in **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
-> ⚠️ Rendering is RAM-heavy (torch + MoviePy + TTS). Render's free tier (512 MB) will OOM **during a render** — the API/trending parts work, but reliable rendering needs the **Standard** plan (2 GB+).
+> ⚠️ Rendering is RAM-heavy (torch + MoviePy + TTS). Render's free tier (512 MB) OOMs **during a render** and its disk is ephemeral, so generated videos don't persist. Reliable rendering + persistence needs the **Standard** plan (2 GB + disk), or host the backend elsewhere. To show videos on the free deployment, commit them under `backend/static/videos/` so they ship with the build.
 
 ---
 
 ## Notes & limitations
 
 - **Python 3.12 only** — torch/Kokoro/spaCy lack wheels for newer versions.
-- **One render at a time** — generation is synchronous per request (in a background task).
+- **One render at a time** — enforced by a lock; concurrent requests queue.
+- **Gemini free tier is rate-limited** (~20 req/min) — script generation now uses a single call; switch to Ollama to avoid limits entirely.
 - **Secrets** — `backend/secrets/` and `.env` are gitignored; never commit OAuth files.
-- On first render the Kokoro and spaCy models download once (cached afterward).
+- First render downloads the Kokoro + spaCy models once (cached afterward).

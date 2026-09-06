@@ -8,9 +8,20 @@ from google import genai
 from google.genai import types
 
 class VideoScriptGenerator:
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash"):
-        self.client = genai.Client(api_key=api_key)
+    def __init__(
+        self,
+        api_key: str = None,
+        model: str = "gemini-2.5-flash",
+        provider: str = "gemini",
+        ollama_model: str = "llama3.2",
+        ollama_base_url: str = "http://localhost:11434",
+    ):
+        self.provider = (provider or "gemini").lower()
         self.model = model
+        self.ollama_model = ollama_model
+        self.ollama_base_url = ollama_base_url.rstrip("/")
+        # Only create the Gemini client when actually using Gemini.
+        self.client = genai.Client(api_key=api_key) if self.provider == "gemini" else None
 
         self.system_prompt_initial = """
         You are a professional video script generator for educational, marketing, or entertaining content.  
@@ -103,12 +114,44 @@ class VideoScriptGenerator:
             print(f"Error fetching web results: {e}")
             return ""
 
+    def _generate_ollama(self, prompt: str, system_prompt: str, max_retries: int = 3) -> str:
+        """Generate JSON via a local Ollama server (free, unlimited)."""
+        url = f"{self.ollama_base_url}/api/chat"
+        payload = {
+            "model": self.ollama_model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+            "stream": False,
+            "format": "json",
+            "options": {"temperature": 0.7, "num_predict": 8192},
+        }
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                resp = requests.post(url, json=payload, timeout=600)
+                resp.raise_for_status()
+                return resp.json()["message"]["content"]
+            except Exception as e:  # noqa: BLE001
+                last_error = e
+                if attempt < max_retries - 1:
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                raise RuntimeError(
+                    f"Ollama call failed: {e}. Is Ollama running at {self.ollama_base_url} "
+                    f"with the model pulled?  (run: ollama pull {self.ollama_model})"
+                )
+        raise RuntimeError(f"Ollama call failed after {max_retries} attempts: {last_error}")
+
     def _generate_content(self, prompt: str, system_prompt: str, max_retries: int = 4) -> str:
         """
-        Generate content using the Gemini API. Retries transient errors
-        (503/429/500/overloaded) with backoff so a brief spike doesn't kill a render.
-        Returns clean JSON with enough output budget to avoid truncation.
+        Generate content using the configured provider. For Gemini, retries transient
+        errors (503/429/500/overloaded) with backoff. Returns clean JSON.
         """
+        if self.provider == "ollama":
+            return self._generate_ollama(prompt, system_prompt)
+
         transient_markers = ("503", "429", "500", "UNAVAILABLE", "overloaded", "high demand", "RESOURCE_EXHAUSTED")
         last_error = None
         for attempt in range(max_retries):
@@ -129,8 +172,14 @@ class VideoScriptGenerator:
                 msg = str(e)
                 is_transient = any(m in msg for m in transient_markers)
                 if is_transient and attempt < max_retries - 1:
-                    wait = 2 * (attempt + 1)
-                    print(f"Gemini transient error (attempt {attempt + 1}); retrying in {wait}s...")
+                    # Honor the server's suggested delay (e.g. "retry in 36s") for
+                    # rate limits; cap it so a render doesn't hang too long.
+                    delay_match = re.search(r"retry in ([\d.]+)s", msg)
+                    if delay_match:
+                        wait = min(float(delay_match.group(1)) + 1, 45)
+                    else:
+                        wait = 2 * (attempt + 1)
+                    print(f"Gemini transient error (attempt {attempt + 1}); retrying in {wait:.0f}s...")
                     time.sleep(wait)
                     continue
                 raise RuntimeError(f"Gemini API call failed: {msg}")
@@ -175,45 +224,52 @@ class VideoScriptGenerator:
         # roughly this many spoken words total — the strongest lever on length.
         target_words = max(12, int(round(duration * words_per_second)))
 
-        # Step 1: Fetch web context for the topic
+        # Fetch web context for the topic
         web_context = self._search_web(topic)
 
-        # Step 2: Generate the initial script outline
-        initial_prompt = f"""Generate an initial video script outline for a {duration}-second video about: {topic}.
-        Key Points: {key_points or 'Comprehensive coverage'}
-        Additional Context: {web_context}
-        STRICT LENGTH: the spoken narration across all sections must total about {target_words} words
-        (the finished video is ~{duration} seconds at ~{words_per_second} words/second). Do not exceed it.
-        Focus on the overall narrative and key sections, but do *not* include timestamps or detailed technical parameters yet."""
+        # SINGLE Gemini call (draft + segmentation combined) to halve free-tier
+        # quota usage. Produces the final timestamped audio + visual script directly.
+        prompt = f"""Create a complete, ready-to-produce short video script about: {topic}.
+        Key points: {key_points or 'Comprehensive coverage'}
+        Additional context: {web_context}
 
-        raw_initial_output = self._generate_content(initial_prompt, self.system_prompt_initial)
-        initial_script = self._extract_json(raw_initial_output)
+        STRICT LENGTH: total spoken narration must be about {target_words} words so the
+        finished video runs ~{duration} seconds at ~{words_per_second} words/second. Do not exceed it.
 
-        # Step 3: Segment the script into timestamped audio and visual segments
-        segmentation_prompt = f"""
-        Here is the initial script draft:
-        {json.dumps(initial_script, indent=2)}
-        Now, segment this script into 5-10 second intervals, adding timestamps and all required audio/visual parameters.
-        The total spoken narration must be about {target_words} words so the video runs ~{duration} seconds. Keep it tight; do not pad.
-        """
-        
-        raw_segmented_output = self._generate_content(segmentation_prompt, self.system_prompt_segmentation)
-        segmented_script = self._extract_json(raw_segmented_output)
+        Break the narration into 5-10 second segments. For each segment provide the narration
+        text and a *realistic, exactly 5-word* image search prompt (something findable on stock
+        photo sites). audio_script and visual_script MUST have the same number of segments.
 
-        # Step 4: Add the topic to the segmented script
-        segmented_script['topic'] = initial_script.get('topic', topic)
+        Output ONLY this JSON structure:
+        {{
+            "topic": "{topic}",
+            "description": "one-line description",
+            "audio_script": [
+                {{"timestamp": "00:00", "text": "narration for this segment",
+                  "speaker": "default", "speed": 1.0, "pitch": 1.0, "emotion": "neutral"}}
+            ],
+            "visual_script": [
+                {{"timestamp_start": "00:00", "timestamp_end": "00:05",
+                  "prompt": "five word realistic image prompt",
+                  "negative_prompt": "abstract, blurry, text, watermark"}}
+            ]
+        }}"""
 
-        # Guard: the downstream audio/image steps require these keys. Fail loudly
-        # with context instead of silently saving a topic-only script.
-        if not segmented_script.get('audio_script'):
+        raw_output = self._generate_content(prompt, self.system_prompt_segmentation)
+        script = self._extract_json(raw_output)
+
+        if not script.get('topic'):
+            script['topic'] = topic
+
+        # Guard: the downstream audio/image steps require audio_script. Fail loudly.
+        if not script.get('audio_script'):
             raise RuntimeError(
                 "Script generation did not produce an 'audio_script'. "
-                f"Parsed keys: {list(segmented_script.keys())}. "
-                "Raw model output (truncated): "
-                f"{raw_segmented_output[:500]}"
+                f"Parsed keys: {list(script.keys())}. "
+                f"Raw model output (truncated): {raw_output[:500]}"
             )
 
-        return segmented_script
+        return script
 
     def refine_script(self, existing_script: Dict, feedback: str) -> Dict:
         prompt = f"""Refine this script based on feedback:

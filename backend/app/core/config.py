@@ -45,6 +45,12 @@ class Settings(BaseSettings):
 
     # Gemini text generation model
     GEMINI_TEXT_MODEL: str = Field(default="gemini-2.5-flash", env="GEMINI_TEXT_MODEL")
+
+    # Script provider: "gemini" (free tier, rate-limited) or "ollama" (local, free,
+    # unlimited — requires Ollama running with the model pulled).
+    SCRIPT_PROVIDER: str = Field(default="gemini", env="SCRIPT_PROVIDER")
+    OLLAMA_MODEL: str = Field(default="llama3.2", env="OLLAMA_MODEL")
+    OLLAMA_BASE_URL: str = Field(default="http://localhost:11434", env="OLLAMA_BASE_URL")
     
     # Paths
     BASE_DIR: Path = Path(__file__).resolve().parent.parent.parent

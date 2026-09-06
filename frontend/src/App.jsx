@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Header } from './components/Header.jsx';
 import { Hero } from './components/Hero.jsx';
 import { CreatorPanel } from './components/CreatorPanel.jsx';
+import { TrendingSection } from './components/TrendingSection.jsx';
 import { PipelineSection } from './components/PipelineSection.jsx';
 import { LibrarySection } from './components/LibrarySection.jsx';
 import { DevFooter } from './components/DevFooter.jsx';
@@ -120,7 +121,26 @@ export function App() {
         }
     }
 
+    function handleGenerateFromArticle(article) {
+        // Build the same shape CreatorPanel produces, from a trending headline.
+        handleGenerate({
+            topic: article.title,
+            duration: 60,
+            keyPoints: (article.keywords ?? []).join(', '),
+            format: 'video',
+            autoPublish: true,
+            privacy: 'unlisted',
+        }).catch((error) => {
+            // handleGenerate rethrows (e.g. "already in progress"); surface gently.
+            window.alert(error.message || 'Could not start generation.');
+        });
+    }
+
     async function handleGenerate(formValues) {
+        // Always take the user to the live pipeline when they hit generate
+        // (even if a render is already running, so they can watch it).
+        scrollToSection('pipeline');
+
         // Guard against double-submit (rapid clicks / Enter+click) firing two renders.
         if (generatingRef.current || isGenerating || isPolling) {
             throw new Error('A render is already in progress. Please wait for it to finish.');
@@ -130,7 +150,6 @@ export function App() {
         setIsGenerating(true);
         setNewFilename(null);
         runPipelineStep(0);
-        scrollToSection('pipeline');
 
         try {
             const payload = buildVideoPayload(formValues);
@@ -175,6 +194,10 @@ export function App() {
                     onDiscover={() => scrollToSection('pipeline')}
                 />
                 <CreatorPanel onGenerate={handleGenerate} isGenerating={isGenerating} />
+                <TrendingSection
+                    onGenerate={handleGenerateFromArticle}
+                    isGenerating={isGenerating || isPolling}
+                />
                 <PipelineSection
                     mode={pipeline.mode}
                     activeStepKey={pipeline.activeStepKey}
