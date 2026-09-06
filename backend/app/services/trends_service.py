@@ -1,8 +1,10 @@
 """
-Trending News Service
+Trending Service
 
-Monitors Economic Times RSS feeds, normalizes articles, and ranks them with a
-free, deterministic heuristic:
+Gathers candidate stories from whatever sources the ACTIVE CONTENT PROFILE
+names - Google Trends, Reddit, Hacker News, YouTube's most-popular chart, or
+plain RSS - normalizes them, and ranks them with a free, deterministic
+heuristic:
 
     score = (W_RECENCY * recency) + (W_TREND * cross_feed_overlap)
 
@@ -26,6 +28,9 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# Fallbacks only. The active profile supplies the real weights (a news channel
+# wants freshness, an explainer channel wants a story with legs), and these are
+# what a profile-less call gets.
 W_RECENCY = 0.45
 W_TREND = 0.55
 
@@ -98,7 +103,33 @@ def _entry_timestamp(entry) -> Optional[float]:
 
 
 def fetch_articles(feed_urls: Optional[List[str]] = None) -> List[Article]:
-    """Fetch and normalize articles from the configured Economic Times feeds."""
+    """Gather candidates from the active profile's sources.
+
+    `feed_urls` forces plain RSS and bypasses the profile entirely - it is what
+    the manual "preview these feeds" path uses. Everything else goes through the
+    profile, which is what makes one deployment serve a gaming channel and a
+    markets channel without a code change.
+    """
+    if feed_urls is None:
+        from app.services import trend_sources
+        from app.services.profiles_service import store
+
+        profile = store.active()
+        sources = profile.get("sources") or []
+        if sources:
+            articles = trend_sources.fetch_all(sources)
+            logger.info(
+                "Fetched %d unique candidate(s) for profile '%s' from %d source(s).",
+                len(articles), profile.get("id"), len(sources),
+            )
+            return articles
+        # A profile with no sources configured: fall through to the env feed
+        # list rather than returning nothing, so the pipeline still has input.
+        logger.warning(
+            "Profile '%s' declares no sources; falling back to TRENDS_FEED_URLS.",
+            profile.get("id"),
+        )
+
     urls = feed_urls or settings.trends_feed_urls_list
     articles: List[Article] = []
     seen_links = set()
@@ -137,7 +168,18 @@ def rank_articles(
     exclude_links: Optional[set] = None,
 ) -> List[Article]:
     """Score and rank articles by recency + cross-feed keyword overlap."""
-    max_age = max_age_hours if max_age_hours is not None else settings.TRENDS_MAX_AGE_HOURS
+    try:
+        from app.services.profiles_service import ranking_weights
+        weights = ranking_weights()
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Falling back to default ranking weights: %s", exc)
+        weights = {"recency": W_RECENCY, "trend": W_TREND,
+                   "max_age_hours": settings.TRENDS_MAX_AGE_HOURS}
+
+    if max_age_hours is not None:
+        max_age = max_age_hours
+    else:
+        max_age = weights["max_age_hours"]
     exclude = exclude_links or set()
     now = time.time()
     max_age_seconds = max_age * 3600.0
@@ -182,7 +224,7 @@ def rank_articles(
         art.keywords = sorted(
             set(art.keywords), key=lambda t: doc_freq[t], reverse=True
         )[:6]
-        art.score = (W_RECENCY * art.recency) + (W_TREND * art.trend)
+        art.score = (weights["recency"] * art.recency) + (weights["trend"] * art.trend)
 
     candidates.sort(key=lambda a: a.score, reverse=True)
     return candidates

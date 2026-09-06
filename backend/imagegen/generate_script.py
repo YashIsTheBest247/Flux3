@@ -328,6 +328,7 @@ class VideoScriptGenerator:
         key_points: Optional[List[str]] = None,
         words_per_second: float = 2.5,
         use_web_context: bool = False,
+        directives: Optional[str] = None,
     ) -> Dict:
         """
         Generate a video script based on the given topic, duration, and key points.
@@ -337,6 +338,10 @@ class VideoScriptGenerator:
             duration (int): Target narration length in seconds (default: 60).
             key_points (Optional[List[str]]): Optional key points to include.
             words_per_second (float): Speaking rate used to target word count.
+            directives (Optional[str]): Channel voice, audience, tone and visual
+                vocabulary from the active content profile. Falls back to the
+                active profile when not passed, so callers that predate profiles
+                keep working.
 
         Returns:
             Dict: A structured video script in JSON format.
@@ -352,9 +357,24 @@ class VideoScriptGenerator:
         # the scraper is ever repointed at a source that works.
         web_context = self._search_web(topic) if use_web_context else ""
 
+        # The channel's identity. This is the entire difference between the
+        # gaming profile and the markets profile: same pipeline, same model,
+        # different eight lines at the top of the prompt.
+        if directives is None:
+            try:
+                from app.services.profiles_service import script_directives
+                directives = script_directives()
+            except Exception:  # noqa: BLE001
+                # Importable outside the app (scripts, tests) - a generic script
+                # is a fine outcome, an ImportError is not.
+                directives = ""
+
         # SINGLE Gemini call (draft + segmentation combined) to halve free-tier
         # quota usage. Produces the final timestamped audio + visual script directly.
         prompt = f"""Create a complete, ready-to-produce short video script about: {topic}.
+
+        {directives}
+
         Key points: {key_points or 'Comprehensive coverage'}
         Additional context: {web_context}
 
@@ -373,15 +393,16 @@ class VideoScriptGenerator:
         - NEVER use an abstract noun as the subject. "volatility", "sentiment", "outlook",
           "uncertainty", "growth", "momentum" cannot be photographed. Replace them with a
           physical stand-in: a trading floor screen, a newspaper front page, a bank counter.
-        - When the story names a real company, index, institution or city, put it in the
-          prompt: "Bombay Stock Exchange building", "Reserve Bank of India facade",
-          "Mumbai skyline at dusk", "Indian rupee banknotes close up".
+        - When the story names a real company, product, institution, place or person,
+          put it in the prompt. A named subject is findable; a generic one is not.
+        - Prefer the PREFERRED VISUAL SUBJECTS above when one fits the segment - they
+          are the vocabulary this channel's audience expects to see.
         - Vary the subjects across segments. Do not repeat the same subject twice.
 
-        Good:  "Reserve Bank of India building", "Indian rupee notes counting",
-               "Mumbai traders watching screens", "oil refinery pipes sunset"
+        Good:  a named building, a named object in use, a person performing a
+               specific action, a recognisable place at a stated time of day
         Bad:   "market volatility concept", "business people reviewing data",
-               "financial growth abstract", "economy uncertainty"
+               "technology innovation abstract", "success and growth"
 
         Output ONLY this JSON structure:
         {{

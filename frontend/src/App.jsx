@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Header } from './components/Header.jsx';
 import { Hero } from './components/Hero.jsx';
+import { ContentTypes } from './components/ContentTypes.jsx';
+import { Editorial } from './components/Editorial.jsx';
+import { PublishingSection } from './components/PublishingSection.jsx';
+import { UploadSection } from './components/UploadSection.jsx';
 import { AutomationSection } from './components/AutomationSection.jsx';
 import { PipelineSection } from './components/PipelineSection.jsx';
 import { LibrarySection } from './components/LibrarySection.jsx';
@@ -18,6 +21,8 @@ import {
     getStorageStatus,
 } from './api/videos.js';
 import { runAutomation } from './api/trends.js';
+import { apiBaseUrl } from './api/client.js';
+import { useReveal } from './lib/useReveal.js';
 
 const idlePipeline = {
     mode: 'idle',
@@ -36,6 +41,9 @@ export function App() {
     const [playingVideo, setPlayingVideo] = useState(null);
     const [provenanceVideo, setProvenanceVideo] = useState(null);
     const [storageStatus, setStorageStatus] = useState(null);
+    // Whose channel this is and what kind - read from /health so the hero and
+    // the upload screen agree with the backend rather than guessing.
+    const [readiness, setReadiness] = useState(null);
 
     const pollTimerRef = useRef(null);
     const generatingRef = useRef(false);
@@ -55,6 +63,23 @@ export function App() {
         // Where media actually lives (B2 bucket) and whether Genblaze is active.
         getStorageStatus().then(setStorageStatus).catch(() => setStorageStatus(null));
     }, []);
+
+    const refreshReadiness = useCallback(async () => {
+        try {
+            const response = await fetch(`${apiBaseUrl}/health`);
+            setReadiness(await response.json());
+        } catch {
+            setReadiness(null);
+        }
+    }, []);
+
+    useEffect(() => {
+        refreshReadiness();
+    }, [refreshReadiness]);
+
+    // Most of this page arrives after the first paint, so the reveal observer
+    // is re-run whenever the async content changes.
+    useReveal([readiness, videos.length]);
 
     useEffect(() => {
         (async () => {
@@ -274,16 +299,19 @@ export function App() {
 
     return (
         <div className="flex min-h-screen flex-col">
-            <Header
-                onNavigate={scrollToSection}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
-            />
             <main className="flex-1">
                 <Hero
-                    onStartAutomation={() => scrollToSection('automation')}
-                    onViewLibrary={() => scrollToSection('library')}
+                    onNavigate={scrollToSection}
+                    profileName={readiness?.profile?.name}
+                    channelTitle={readiness?.youtube?.channel_title}
+                    publishMode={readiness?.youtube?.mode}
                 />
+                <Editorial
+                    onNavigate={scrollToSection}
+                    activeProfileName={readiness?.profile?.name}
+                />
+                <ContentTypes onActivated={refreshReadiness} />
+                <PublishingSection onChanged={refreshReadiness} />
                 <AutomationSection
                     onGenerate={handleGenerateFromArticle}
                     onRunAutomation={handleRunAutomation}
@@ -294,9 +322,11 @@ export function App() {
                     activeStepKey={pipeline.activeStepKey}
                     statusText={pipeline.statusText}
                 />
+                <UploadSection youtubeReady={Boolean(readiness?.youtube?.ready)} />
                 <LibrarySection
                     videos={videos}
                     searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
                     isGenerating={isGenerating}
                     isPolling={isPolling}
                     newFilename={newFilename}

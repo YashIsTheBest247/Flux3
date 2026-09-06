@@ -5,7 +5,7 @@
 #   docker build -t flux .
 #   docker run -p 8000:8000 --env-file backend/.env flux
 #
-# Works as-is on Hugging Face Spaces (Docker), Railway, Render, Fly.io and
+# Works as-is on Render, Fly.io, Koyeb and
 # Cloud Run. Media durability comes from Backblaze B2, so an ephemeral
 # filesystem is fine — the library survives restarts and redeploys.
 

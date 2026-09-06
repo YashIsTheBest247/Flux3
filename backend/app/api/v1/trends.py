@@ -47,3 +47,39 @@ async def trends_run_now(
     """
     background_tasks.add_task(trends_scheduler.run_pipeline_once, top_n, auto_publish)
     return {"success": True, "message": "Trending pipeline run triggered."}
+
+
+@router.get("/sources")
+async def trends_sources():
+    """What the active profile is actually scanning, and what it found.
+
+    Per-source counts rather than one merged number, because "the pipeline
+    returned nothing" and "Reddit returned nothing" are different problems with
+    different fixes, and the merged view hides which one you have.
+    """
+    from app.services import trend_sources
+    from app.services.profiles_service import store
+
+    profile = store.active()
+    sources = profile.get("sources") or []
+    report = []
+    for spec in sources:
+        kind = (spec.get("type") or "").lower()
+        try:
+            items = trend_sources.fetch_all([spec])
+            report.append({
+                "type": kind,
+                "config": {k: v for k, v in spec.items() if k != "type"},
+                "count": len(items),
+                "sample": [a.title for a in items[:3]],
+                "error": None,
+            })
+        except Exception as exc:  # noqa: BLE001
+            report.append({"type": kind, "config": {}, "count": 0,
+                           "sample": [], "error": str(exc)})
+
+    return {
+        "profile": {"id": profile.get("id"), "name": profile.get("name")},
+        "sources": report,
+        "available_types": trend_sources.AVAILABLE_SOURCES,
+    }

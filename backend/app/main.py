@@ -33,12 +33,31 @@ async def lifespan(app: FastAPI):
     # Ensure required directories exist
     settings.ensure_directories()
 
+    # Pull the dashboard-entered credentials in BEFORE anything reads a key.
+    # Without this the scheduler, the storage client and the script model all
+    # boot against the environment alone and a creator who configured
+    # everything through the UI would see an unconfigured app until the next
+    # restart.
+    try:
+        from app.services.credentials_service import vault
+        vault.apply_to_settings()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not load stored credentials: %s", exc)
+
+    from app.services.profiles_service import store as profiles_store
+    logger.info("Active content profile: %s", profiles_store.active_id())
+
     # Start the trending pipeline scheduler (no-op unless TRENDS_ENABLED=true)
     from app.services.trends_scheduler import start_scheduler, shutdown_scheduler
     start_scheduler()
 
+    # Keep the Render instance from idling out between scheduled runs.
+    from app.services.keepalive import start_keepalive, shutdown_keepalive
+    start_keepalive()
+
     yield
 
+    shutdown_keepalive()
     shutdown_scheduler()
     logger.info("Shutting down FastAPI Video Generator...")
 
@@ -88,6 +107,18 @@ async def root():
     }
 
 
+@app.get("/ping")
+async def ping():
+    """Liveness beacon for the keep-alive pinger.
+
+    Separate from /health on purpose. /health reaches out to Backblaze and
+    YouTube on every call; at a ping every 12 minutes that is ~120 needless
+    round trips a day. Keeping the instance awake only requires that a request
+    arrive, so this one touches nothing.
+    """
+    return {"ok": True}
+
+
 @app.get("/health")
 async def health_check():
     """
@@ -99,6 +130,8 @@ async def health_check():
     """
     from app.services import youtube_service
     from app.services.genblaze_service import genblaze
+    from app.services.keepalive import keepalive_status
+    from app.services.profiles_service import store as profiles_store
     from app.services.storage_service import storage
 
     b2 = storage.status()
@@ -123,6 +156,11 @@ async def health_check():
         "backblaze_b2": b2,
         "genblaze": genblaze.status(),
         "youtube": youtube,
+        "keepalive": keepalive_status(),
+        "profile": {
+            "active": profiles_store.active_id(),
+            "name": profiles_store.active().get("name"),
+        },
     }
 
 

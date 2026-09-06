@@ -12,7 +12,7 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     plan: starter
-    healthCheckPath: /health
+    healthCheckPath: /ping
     autoDeploy: true
     envVars:
       - key: ENVIRONMENT
@@ -59,11 +59,44 @@ services:
       - key: YOUTUBE_TOKEN_JSON
         sync: false
 
-      # --- Trending scheduler — off by default ------------------------
+      # --- Trending scheduler -----------------------------------------
+      # On: the whole point of the deploy is that it renders unattended.
       - key: TRENDS_ENABLED
-        value: "false"
+        value: "true"
+      # Still off — publishing needs YOUTUBE_TOKEN_JSON, and an unattended
+      # upload to a real channel should be a deliberate choice.
       - key: TRENDS_AUTO_PUBLISH
         value: "false"
+
+      # --- Credential vault + content profile ----------------------------
+      # Keys entered in the dashboard are encrypted with this before being
+      # written to B2. generateValue gives each deployment its own; it is
+      # stable for the life of the service, and changing it makes the stored
+      # credentials unreadable (the app says so rather than failing silently).
+      - key: FLUX_SECRET_KEY
+        generateValue: true
+      # Which channel type the pipeline starts as. Changed in the dashboard
+      # afterwards; the choice is stored in B2, so this is only the first boot.
+      - key: CONTENT_PROFILE
+        value: tech_news
+      # Upload ceiling for bring-your-own-video. Render's disk is small and
+      # ephemeral, and the upload plus its extracted frame and audio all live
+      # there at once.
+      - key: INGEST_MAX_MB
+        value: "400"
+
+      # --- Keep-alive ---------------------------------------------------
+      # Render idles a web service out after ~15 minutes of no inbound
+      # traffic. The app pings its own public URL to stay warm; Render
+      # injects RENDER_EXTERNAL_URL, so no URL needs configuring here.
+      #
+      # This cannot wake an instance that has already stopped — nothing
+      # inside a stopped container runs. .github/workflows/keepalive.yml
+      # pings from outside and is what actually revives it.
+      - key: KEEPALIVE_ENABLED
+        value: "true"
+      - key: KEEPALIVE_MINUTES
+        value: "12"
 
       # Small instances: cap ffmpeg threads to keep peak memory down.
       - key: FLUX_FFMPEG_THREADS

@@ -1,0 +1,52 @@
+id: entertainment
+name: Entertainment
+tagline: What everyone is watching and arguing about
+emoji: "\U0001F3AC"
+accent: "#E05B8D"
+
+sources:
+  - type: google_trends
+    geo: US
+    limit: 25
+  - type: rss
+    limit: 20
+    urls:
+      - https://variety.com/feed/
+      - https://www.hollywoodreporter.com/feed/
+  - type: reddit
+    limit: 12
+    subreddits: [movies, television]
+  - type: youtube_trending
+    region: US
+    category: entertainment
+    limit: 20
+
+persona:
+  voice: a sharp culture commentator who has actually seen the thing
+  audience: film and TV watchers aged 18 to 40 who follow releases
+  tone: witty and confident, never mean about private individuals
+  hook_style: open on the reaction, then explain what caused it
+  cta: Follow for the culture roundup in under a minute
+  avoid: >-
+    gossip about private lives, unverified rumour, body commentary,
+    anything defamatory about a named person
+
+visuals:
+  style: cinematic editorial photography, deep shadows, warm key light
+  subjects: cinema interiors, red carpets, film sets, neon marquees, crowds
+  prefer_clips: true
+
+format:
+  duration: 45
+  youtube_category: "24"
+  hashtags: ["#entertainment", "#movies", "#shorts"]
+
+ranking:
+  recency: 0.6
+  trend: 0.4
+  max_age_hours: 24
+
+schedule:
+  hours: [11, 19]
+  timezone: America/Los_Angeles
+  top_n: 1

@@ -1,0 +1,48 @@
+id: fitness
+name: Fitness & Health
+tagline: One idea, the evidence, what to do Monday
+emoji: "\U0001F3CB"
+accent: "#E0793B"
+
+sources:
+  - type: reddit
+    limit: 15
+    subreddits: [fitness, nutrition, running]
+  - type: rss
+    limit: 20
+    urls:
+      - https://www.sciencedaily.com/rss/health_medicine/fitness.xml
+      - https://www.medicalnewstoday.com/rss
+  - type: google_trends
+    geo: US
+    limit: 20
+
+persona:
+  voice: an evidence-first coach who cites the study and admits what is unsettled
+  audience: people who already train and want to know what actually works
+  tone: practical and honest; one claim, its evidence, one action
+  hook_style: open on the common belief the evidence does not support
+  cta: Follow for training advice that cites its sources
+  avoid: >-
+    medical advice, diagnosis, dosage, cure claims, before/after body shaming,
+    anything that would need a doctor to say responsibly
+
+visuals:
+  style: warm natural-light athletic photography, real gyms, real effort
+  subjects: runners at dawn, gym floors, kettlebells, meal prep, stretching
+  prefer_clips: true
+
+format:
+  duration: 45
+  youtube_category: "26"
+  hashtags: ["#fitness", "#health", "#shorts"]
+
+ranking:
+  recency: 0.35
+  trend: 0.65
+  max_age_hours: 72
+
+schedule:
+  hours: [6, 17]
+  timezone: America/New_York
+  top_n: 1

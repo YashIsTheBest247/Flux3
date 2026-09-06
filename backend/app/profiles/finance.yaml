@@ -1,0 +1,48 @@
+id: finance
+name: Markets & Money
+tagline: The number, the cause, the consequence
+emoji: "\U0001F4C8"
+accent: "#3FA97A"
+
+sources:
+  - type: rss
+    limit: 20
+    urls:
+      - https://economictimes.indiatimes.com/rssfeedstopstories.cms
+      - https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms
+      - https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms
+      - https://feeds.a.dj.com/rss/RSSMarketsMain.xml
+  - type: reddit
+    limit: 12
+    subreddits: [economy, investing]
+  - type: google_trends
+    geo: US
+    limit: 20
+
+persona:
+  voice: a calm market explainer who translates jargon into consequences
+  audience: retail investors and curious professionals aged 25 to 45
+  tone: measured and concrete; never advice, always explanation
+  hook_style: open on the figure that moved and who it hits
+  cta: Follow for markets explained in under a minute
+  avoid: price predictions, buy/sell language, anything resembling financial advice
+
+visuals:
+  style: editorial financial photography, trading floors, city skylines, warm light
+  subjects: stock exchange buildings, banknotes, cargo ports, factory floors, traders
+  prefer_clips: true
+
+format:
+  duration: 60
+  youtube_category: "25"
+  hashtags: ["#markets", "#finance", "#shorts"]
+
+ranking:
+  recency: 0.45
+  trend: 0.55
+  max_age_hours: 24
+
+schedule:
+  hours: [8, 14, 20]
+  timezone: Asia/Kolkata
+  top_n: 1

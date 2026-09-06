@@ -14,12 +14,25 @@ export default {
                 faint: 'rgb(var(--faint) / <alpha-value>)',
                 tint: 'rgb(var(--tint) / <alpha-value>)',
                 accent: 'rgb(var(--accent) / <alpha-value>)',
+                accentsoft: 'rgb(var(--accent-soft) / <alpha-value>)',
+                pagesolid: 'rgb(var(--page-solid) / <alpha-value>)',
                 primary: 'rgb(var(--primary) / <alpha-value>)',
                 onprimary: 'rgb(var(--on-primary) / <alpha-value>)',
             },
             fontFamily: {
-                display: ['"Space Grotesk"', 'system-ui', 'sans-serif'],
+                // Fraunces carries the section headings; Instrument Serif is
+                // reserved for the oversized wordmark, where its very high
+                // stroke contrast reads as editorial rather than decorative.
+                display: ['Fraunces', 'ui-serif', 'Georgia', 'serif'],
+                wordmark: ['"Instrument Serif"', 'ui-serif', 'Georgia', 'serif'],
                 sans: ['Inter', 'system-ui', 'sans-serif'],
+            },
+            fontSize: {
+                // Clamped so the wordmark fills the viewport at every width
+                // without a stack of breakpoint overrides.
+                wordmark: ['clamp(3.5rem, 15vw, 13rem)', { lineHeight: '0.82' }],
+                'display-lg': ['clamp(2.25rem, 5.5vw, 4.25rem)', { lineHeight: '1.04' }],
+                'display-md': ['clamp(1.75rem, 3.6vw, 2.75rem)', { lineHeight: '1.1' }],
             },
             borderRadius: {
                 '4xl': '2rem',

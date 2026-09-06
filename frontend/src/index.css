@@ -3,74 +3,82 @@
 @tailwind utilities;
 
 @layer base {
-    /* ---- Dark theme (default) ---- */
+    /* ---- Light: the default ----
+       A warm cream page with white panels floating on it, the way a printed
+       magazine spread sits on its paper. The only dark surfaces are the hero
+       card and the stats band, and they earn it by carrying photography. */
     :root,
-    .dark {
-        --panel: 0 0 0; /* solid black boxes */
-        --panel-2: 13 13 13;
-        --fg: 242 242 242;
-        --muted: 152 152 152;
-        --faint: 96 96 96;
-        --tint: 255 255 255; /* borders / hovers */
-        --accent: 255 255 255;
-        --primary: 255 255 255;
-        --on-primary: 0 0 0;
-        --glow-color: 255 255 255;
-        --glow-strength: 0.1;
-        --page: linear-gradient(180deg, #1a1a1a 0%, #0e0e0e 52%, #060606 100%);
-        --accent-grad: linear-gradient(135deg, #ffffff 0%, #d8d8d8 45%, #8f8f8f 100%);
-        --glow-shadow: 0 0 80px -20px rgba(255, 255, 255, 0.28);
-        /* 0.14 was effectively invisible against the near-black page. */
-        --scroll-thumb: rgba(255, 255, 255, 0.3);
-        --scroll-thumb-hover: rgba(255, 255, 255, 0.5);
-        /* Tells the browser to render native UI (scrollbars, form controls,
-           spinners) dark. Without it Firefox draws a light scrollbar here. */
-        color-scheme: dark;
+    .light {
+        --page-solid: 239 234 225; /* the cream the panels sit on */
+        --panel: 255 255 255;
+        --panel-2: 247 243 237;
+        --fg: 28 25 23;
+        --muted: 123 113 104;
+        --faint: 167 158 147;
+        --tint: 40 33 28; /* borders / hovers */
+        --accent: 138 106 70; /* the brown used for emphasis */
+        --accent-soft: 169 139 98; /* the lighter tan in two-tone headings */
+        --primary: 43 36 30;
+        --on-primary: 250 246 240;
+        --glow-color: 138 106 70;
+        --glow-strength: 0.05;
+        --page: linear-gradient(180deg, #F2EDE5 0%, #EFEAE1 60%, #EAE3D8 100%);
+        --accent-grad: linear-gradient(135deg, #2B241E 0%, #6B5443 50%, #A98B62 100%);
+        --glow-shadow: 0 24px 60px -34px rgba(43, 36, 30, 0.4);
+        --scroll-thumb: rgba(43, 36, 30, 0.28);
+        --scroll-thumb-hover: rgba(43, 36, 30, 0.45);
+        --scrim: linear-gradient(180deg, rgba(12, 10, 9, 0) 0%, rgba(12, 10, 9, 0.15) 38%, rgba(12, 10, 9, 0.88) 100%);
+        color-scheme: light;
     }
 
-    /* ---- Light theme ---- */
-    .light {
-        --panel: 255 255 255; /* solid white boxes */
-        --panel-2: 247 247 244;
-        --fg: 20 20 20;
-        --muted: 92 92 92;
-        --faint: 150 150 150;
-        --tint: 18 18 18;
-        --accent: 18 18 18;
-        --primary: 18 18 18;
-        --on-primary: 250 250 250;
-        --glow-color: 120 120 120;
-        --glow-strength: 0.06;
-        --page: linear-gradient(180deg, #ffffff 0%, #f2f1ec 55%, #e8e6df 100%);
-        --accent-grad: linear-gradient(135deg, #1c1c1c 0%, #555555 50%, #9a9a9a 100%);
-        --glow-shadow: 0 20px 50px -30px rgba(0, 0, 0, 0.25);
-        --scroll-thumb: rgba(0, 0, 0, 0.32);
-        --scroll-thumb-hover: rgba(0, 0, 0, 0.5);
-        color-scheme: light;
+    /* ---- Dark: opt-in ---- */
+    .dark {
+        --page-solid: 16 13 11;
+        --panel: 26 22 19;
+        --panel-2: 34 29 25;
+        --fg: 242 237 228;
+        --muted: 167 155 136;
+        --faint: 116 106 92;
+        --tint: 232 222 206;
+        --accent: 200 164 124;
+        --accent-soft: 216 195 165;
+        --primary: 242 237 228;
+        --on-primary: 20 17 14;
+        --glow-color: 200 164 124;
+        --glow-strength: 0.1;
+        --page: linear-gradient(180deg, #17130F 0%, #100D0B 52%, #0A0908 100%);
+        --accent-grad: linear-gradient(135deg, #F2EDE4 0%, #D8C3A5 45%, #A08560 100%);
+        --glow-shadow: 0 0 80px -20px rgba(200, 164, 124, 0.3);
+        --scroll-thumb: rgba(232, 222, 206, 0.28);
+        --scroll-thumb-hover: rgba(232, 222, 206, 0.45);
+        --scrim: linear-gradient(180deg, rgba(10, 9, 8, 0) 0%, rgba(10, 9, 8, 0.35) 45%, rgba(10, 9, 8, 0.92) 100%);
+        color-scheme: dark;
     }
 
     html {
         scroll-behavior: smooth;
+        scrollbar-width: thin;
+        scrollbar-color: var(--scroll-thumb) transparent;
+    }
+
+    html,
+    body {
+        /* Nothing in this layout is meant to scroll sideways. The hero card is
+           inset from the page edge, so a single overflowing child shows up as a
+           horizontal scrollbar under everything. */
+        @apply overflow-x-hidden;
+        max-width: 100%;
     }
 
     body {
-        /* Glassy, lit backdrop — boxes sit on top as solid panels */
         background: var(--page) fixed;
         @apply min-h-screen text-txt font-sans antialiased;
     }
 
     ::selection {
-        @apply bg-accent/30;
+        @apply bg-accent/25;
     }
 
-    /* Firefox — ::-webkit-scrollbar does nothing there, so without this the
-       page kept the OS default scrollbar, which reads light on a dark page. */
-    html {
-        scrollbar-width: thin;
-        scrollbar-color: var(--scroll-thumb) transparent;
-    }
-
-    /* Chromium / WebKit */
     ::-webkit-scrollbar {
         width: 10px;
         height: 10px;
@@ -81,8 +89,6 @@
     ::-webkit-scrollbar-thumb {
         background: var(--scroll-thumb);
         border-radius: 9999px;
-        /* Inset the thumb so it reads as a rounded pill rather than a bar
-           welded to the edge of the viewport. */
         border: 2px solid transparent;
         background-clip: content-box;
     }
@@ -90,48 +96,89 @@
         background: var(--scroll-thumb-hover);
         background-clip: content-box;
     }
-    ::-webkit-scrollbar-corner {
-        background: transparent;
-    }
 }
 
 @layer components {
-    /* Solid boxes */
+    /* A white sheet on the cream page. The generous radius and the soft, very
+       diffuse shadow are what make it read as paper rather than as a div. */
+    .sheet {
+        @apply rounded-[1.75rem] bg-panel shadow-[0_2px_40px_-24px_rgba(43,36,30,0.45)];
+    }
+
     .glass {
         @apply rounded-2xl border border-tint/10 bg-panel shadow-card;
     }
 
     .glass-strong {
-        @apply rounded-2xl border border-tint/10 bg-panel2 shadow-card;
+        @apply rounded-2xl border border-tint/[0.08] bg-panel2;
     }
 
     .eyebrow {
-        @apply text-[0.7rem] font-medium uppercase tracking-[0.22em] text-muted;
+        @apply text-[0.68rem] font-medium uppercase tracking-[0.2em] text-faint;
     }
 
     .display {
-        @apply font-display tracking-tight;
+        @apply font-display font-normal tracking-[-0.015em];
+    }
+
+    .wordmark {
+        @apply font-wordmark uppercase leading-[0.78] tracking-[0.01em];
     }
 
     .gradient-text {
         @apply bg-accent-grad bg-clip-text text-transparent;
     }
 
-    /* Buttons */
+    /* Buttons are pills with small, wide-tracked labels, matching the nav. */
     .btn-light {
-        @apply inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-sm font-semibold text-onprimary transition-all duration-200 hover:opacity-90 hover:shadow-glow disabled:cursor-not-allowed disabled:opacity-50;
+        @apply inline-flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3 text-[0.78rem] font-semibold uppercase tracking-[0.1em] text-onprimary transition-all duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40;
     }
 
     .btn-ghost {
-        @apply inline-flex items-center justify-center gap-2 rounded-full border border-tint/[0.15] bg-panel px-6 py-3 text-sm font-semibold text-txt transition-colors duration-200 hover:border-tint/30 hover:bg-panel2 disabled:cursor-not-allowed disabled:opacity-50;
+        @apply inline-flex items-center justify-center gap-2 rounded-full border border-tint/15 bg-transparent px-6 py-3 text-[0.78rem] font-semibold uppercase tracking-[0.1em] text-txt transition-colors duration-200 hover:border-tint/35 hover:bg-tint/[0.04] disabled:cursor-not-allowed disabled:opacity-40;
+    }
+
+    .btn-accent {
+        @apply inline-flex items-center justify-center gap-2 rounded-full bg-accent px-6 py-3 text-[0.78rem] font-semibold uppercase tracking-[0.1em] text-white transition-all duration-200 hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-40;
     }
 
     .chip {
         @apply inline-flex items-center gap-2 rounded-full border border-tint/[0.12] bg-panel px-3 py-1 text-xs font-medium text-muted;
     }
 
+    /* The filled brown pills in the reference's tag row. */
+    .pill-solid {
+        @apply inline-flex items-center gap-2 rounded-full bg-[rgb(var(--primary))] px-4 py-2 text-[0.72rem] font-medium text-onprimary;
+    }
+
+    .pill-quiet {
+        @apply inline-flex items-center gap-2 rounded-full border border-tint/15 px-4 py-2 text-[0.72rem] font-medium text-muted transition-colors hover:border-tint/35 hover:text-txt;
+    }
+
     .field-input {
-        @apply w-full rounded-xl border border-tint/[0.12] bg-panel2 px-4 py-3 text-txt placeholder:text-faint focus:border-accent/50 focus:ring-0;
+        @apply w-full rounded-xl border border-tint/[0.14] bg-panel2 px-4 py-3 text-txt placeholder:text-faint focus:border-accent/50 focus:ring-0;
+    }
+
+    .rule-label {
+        @apply flex items-center gap-4 text-[0.68rem] uppercase tracking-[0.2em] text-faint;
+    }
+    .rule-label::before,
+    .rule-label::after {
+        content: '';
+        @apply h-px flex-1 bg-tint/10;
+    }
+
+    /* An image that responds to the pointer. Used everywhere a photograph is
+       also a control - the profile cards, the service tiles, the gallery. */
+    .media {
+        @apply relative overflow-hidden bg-panel2;
+    }
+    .media img {
+        @apply h-full w-full object-cover transition-transform duration-[900ms] ease-out;
+    }
+    .media:hover img,
+    .media:focus-within img {
+        @apply scale-[1.06];
     }
 }
 
@@ -140,26 +187,52 @@
         background: radial-gradient(
             closest-side,
             rgb(var(--glow-color) / var(--glow-strength)),
-            rgb(var(--glow-color) / 0.03) 60%,
             transparent 100%
         );
     }
 
-    .glow-cool {
-        background: radial-gradient(
-            closest-side,
-            rgb(var(--glow-color) / 0.05),
-            transparent 100%
-        );
+    .scrim {
+        background: var(--scrim);
     }
 
-    /* Falling vertical light streak */
-    .beam {
-        width: 1px;
-        background: linear-gradient(
-            to bottom,
-            transparent,
-            rgb(var(--glow-color) / 0.55)
-        );
+    /* Film grain over the dark photographic surfaces, so large gradients do
+       not band on cheap panels. */
+    .grain::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.04;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    /* Reveal-on-scroll, applied by a tiny IntersectionObserver hook. Kept as a
+       utility so anything can opt in without wrapping it in a component. */
+    .reveal {
+        opacity: 0;
+        transform: translateY(18px);
+        transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .reveal.is-in {
+        opacity: 1;
+        transform: none;
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .reveal {
+            opacity: 1;
+            transform: none;
+            transition: none;
+        }
+        .media img {
+            transition: none;
+        }
     }
 }

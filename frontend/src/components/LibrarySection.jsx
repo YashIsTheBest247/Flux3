@@ -4,6 +4,7 @@ import { titleFromFilename } from '../lib/payload.js';
 export function LibrarySection({
     videos,
     searchQuery,
+    onSearchChange,
     isGenerating,
     isPolling,
     newFilename,
@@ -27,21 +28,35 @@ export function LibrarySection({
     const showAwaiting = isGenerating || isPolling;
 
     return (
-        <section id="library" className="mx-auto w-full max-w-[1600px] scroll-mt-20 px-5 py-14 lg:px-8">
-            <div className="mb-2 flex items-center gap-3">
-                <span className="grid h-8 w-8 place-items-center rounded-lg border border-tint/15 bg-tint/[0.06]">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4" strokeLinecap="round" strokeLinejoin="round">
-                        <rect x="3" y="5" width="18" height="14" rx="2" />
-                        <path d="m10 9 5 3-5 3z" />
+        <section id="library" className="mx-auto w-full max-w-[1560px] scroll-mt-6 px-5 py-16 sm:px-10">
+            <div className="flex flex-wrap items-end justify-between gap-5">
+                <div>
+                    <span className="eyebrow">Your library</span>
+                    <h2 className="display mt-3 text-display-md">
+                        Everything <span className="text-accentsoft">published</span>
+                    </h2>
+                    <p className="mt-3 max-w-md text-sm leading-relaxed text-muted">
+                        Finished renders, stored on Backblaze B2 with a signed manifest each.
+                    </p>
+                </div>
+
+                {/* The search moved here from the old top bar - it only ever
+                    filtered this list, so it belongs beside it. */}
+                <label className="relative flex w-full max-w-sm items-center">
+                    <span className="sr-only">Search your library</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="pointer-events-none absolute left-4 h-4 w-4 text-faint">
+                        <circle cx="11" cy="11" r="7" />
+                        <path d="m20 20-3.5-3.5" />
                     </svg>
-                </span>
-                <h2 className="display text-2xl font-bold tracking-tight sm:text-3xl">
-                    Generated News Videos
-                </h2>
+                    <input
+                        type="search"
+                        value={searchQuery}
+                        onChange={(event) => onSearchChange?.(event.target.value)}
+                        placeholder="Search by topic…"
+                        className="field-input rounded-full py-2.5 pl-11 pr-4 text-sm"
+                    />
+                </label>
             </div>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted">
-                AI-generated videos from Economic Times articles appear here automatically
-            </p>
 
             {/* Where the media actually lives — durable storage + provenance status. */}
             {storageStatus && (

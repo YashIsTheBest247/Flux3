@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 
 function getInitialTheme() {
-    if (typeof window === 'undefined') return 'dark';
-    return window.localStorage.getItem('flux-theme') || 'dark';
+    if (typeof window === 'undefined') return 'light';
+    // Light is the design's home key; dark is the opt-in.
+    return window.localStorage.getItem('flux-theme') || 'light';
 }
 
 function SunIcon(props) {

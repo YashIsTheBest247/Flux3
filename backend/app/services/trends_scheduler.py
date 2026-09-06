@@ -30,6 +30,7 @@ from apscheduler.triggers.cron import CronTrigger
 from app.core.config import settings
 from app.schemas.video import VideoGenerationRequest
 from app.services import trends_service
+from app.services.profiles_service import store as profiles_store
 
 logger = logging.getLogger(__name__)
 
@@ -195,8 +196,21 @@ def start_scheduler() -> None:
     # itself healthy on every boot. Wall-clock slots are also what a viewer
     # experiences as a schedule: the same times daily, not times that drift by
     # however long the last deploy took.
-    hours = settings.trends_schedule_hours
-    tz = ZoneInfo(settings.TRENDS_TIMEZONE)
+    # The schedule belongs to the content profile: a US tech channel publishes
+    # at 09:00 Eastern and a markets channel at 08:00 IST, and one deployment
+    # should be able to be either without an env var change. The env values stay
+    # as the fallback for a profile that does not declare a schedule.
+    schedule = (profiles_store.active().get("schedule") or {})
+    hours = [int(h) for h in schedule.get("hours", []) if str(h).strip().isdigit()]         or settings.trends_schedule_hours
+    tz_name = schedule.get("timezone") or settings.TRENDS_TIMEZONE
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception as exc:  # noqa: BLE001
+        # A typo in a custom profile must not stop the scheduler from starting.
+        logger.warning("Unknown timezone %r (%s); falling back to %s.",
+                       tz_name, exc, settings.TRENDS_TIMEZONE)
+        tz = ZoneInfo(settings.TRENDS_TIMEZONE)
+        tz_name = settings.TRENDS_TIMEZONE
 
     _scheduler = BackgroundScheduler(daemon=True, timezone=tz)
     _scheduler.add_job(
@@ -213,10 +227,12 @@ def start_scheduler() -> None:
     )
     _scheduler.start()
     logger.info(
-        "Trending scheduler started: %s daily at %s (%s), %d video(s) per slot, "
-        "auto_publish=%s, youtube_auto_upload=%s.",
-        len(hours), ", ".join(f"{h:02d}:00" for h in hours), settings.TRENDS_TIMEZONE,
-        settings.TRENDS_TOP_N, settings.TRENDS_AUTO_PUBLISH, settings.YOUTUBE_AUTO_UPLOAD,
+        "Trending scheduler started for profile '%s': %d slot(s) daily at %s (%s), "
+        "%d video(s) per slot, auto_publish=%s, youtube_auto_upload=%s.",
+        profiles_store.active_id(), len(hours),
+        ", ".join(f"{h:02d}:00" for h in hours), tz_name,
+        int(schedule.get("top_n") or settings.TRENDS_TOP_N),
+        settings.TRENDS_AUTO_PUBLISH, settings.YOUTUBE_AUTO_UPLOAD,
     )
 
     # Catch up a slot the container slept through. Without this, a deploy at
@@ -238,6 +254,17 @@ def start_scheduler() -> None:
     elif settings.TRENDS_RUN_ON_STARTUP:
         logger.info("TRENDS_RUN_ON_STARTUP=true -> triggering an immediate run.")
         _scheduler.add_job(run_pipeline_once, id=f"{JOB_ID}_startup", replace_existing=True)
+
+
+def restart_scheduler() -> None:
+    """Rebuild the schedule after the active profile changes.
+
+    The cron trigger is fixed at construction, so new publish hours or a new
+    timezone only take effect if the job is recreated. Cheap enough to just tear
+    down and start again.
+    """
+    shutdown_scheduler()
+    start_scheduler()
 
 
 def shutdown_scheduler() -> None:

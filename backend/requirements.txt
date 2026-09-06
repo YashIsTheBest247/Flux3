@@ -18,9 +18,18 @@ genblaze-s3
 genblaze-google
 genblaze-gmicloud
 
-# Trending pipeline (RSS monitoring + scheduling)
+# Trending pipeline (multi-source discovery + scheduling)
 feedparser
 APScheduler
+
+# Content profiles are YAML so they can be hand-edited and added without code.
+PyYAML
+
+# Credential vault. Every key entered in the dashboard is Fernet-encrypted
+# before it is written to B2. Arrives transitively via google-auth today, but
+# this file depends on it directly, so it is pinned here rather than left to
+# survive by luck.
+cryptography
 
 # YouTube Data API (auto-publishing)
 google-api-python-client

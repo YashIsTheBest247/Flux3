@@ -1,20 +1,27 @@
-# Flux — Provenance-Aware News-to-Video Automation
+# Flux — Creator Automation
 
-### ▶ **Live app: https://genblaze-production.up.railway.app**
+### ▶ **Live app: https://YOUR-SERVICE.onrender.com**
 
-[Health / readiness](https://genblaze-production.up.railway.app/health) ·
-[API docs](https://genblaze-production.up.railway.app/docs) ·
-[Storage + Genblaze status](https://genblaze-production.up.railway.app/api/v1/videos/storage)
+[Health / readiness](https://YOUR-SERVICE.onrender.com/health) ·
+[API docs](https://YOUR-SERVICE.onrender.com/docs) ·
+[Storage + Genblaze status](https://YOUR-SERVICE.onrender.com/api/v1/videos/storage)
 
 One URL serves both the UI and the API — the Docker image bundles the React SPA
 into FastAPI, so there is no separate frontend host and no CORS to configure.
 
 
-Flux monitors **Economic Times** RSS feeds, ranks the trending stories, and automatically turns the top ones into vertical (9:16) short-form videos — script, visuals, narration, subtitles, thumbnail. Every render is orchestrated and signed through the **[Genblaze](https://github.com/backblaze-labs/genblaze)** SDK and stored durably on **Backblaze B2**, then optionally published to YouTube. Unattended, on a schedule.
+Filming and editing is half the job. The other half — uploading, tagging, scheduling, thumbnails, captions, cutting clips for socials — eats hours a week and has nothing to do with making good content. Flux does that half.
 
-News in → a verifiable MP4 in object storage, in about two minutes.
+**Two ways in.**
 
-**The problem it solves:** AI-generated news video is cheap to produce and impossible to audit. Flux makes every output answerable — the manifest travels with the file and says which model wrote the script, which model drew each frame, which voice narrated it, and what the SHA-256 of every artefact was at the moment it was made.
+1. **Automate the whole thing.** Pick the kind of channel you run, and Flux scans that niche's trend sources on a schedule, ranks what is actually moving, and produces a finished vertical (9:16) short — script, visuals, narration, captions, thumbnail — then publishes it to your channel. Unattended.
+2. **Bring your own video.** Upload something you already made and it comes back with three title options, a description, ~20 tags, a thumbnail cut from your own footage, a caption track, and timestamps for the Shorts-worthy moments — then uploads it. **Your file is never re-encoded.**
+
+**It is yours, not ours.** You enter your own API keys and connect your own YouTube channel from the dashboard. Uploads land on your channel, the quota is yours, and the keys are encrypted before they are stored. There is no env var to edit and no redeploy.
+
+**Choose your niche.** Six presets ship — Tech News, Markets & Money, Gaming, Fitness & Health, Entertainment, Science & Curiosity — and you can write your own. The profile decides which trend sources are scanned, how stories are ranked, the voice the script is written in, the visual vocabulary, the YouTube category and the publish schedule. The pipeline underneath is identical; a preset is a twenty-line YAML file.
+
+Every render is still orchestrated and signed through the **[Genblaze](https://github.com/backblaze-labs/genblaze)** SDK and stored durably on **Backblaze B2** — the manifest says which model wrote the script, which model drew each frame, which voice narrated it, and what the SHA-256 of every artefact was at the moment it was made.
 
 > Deep technical design lives in **[ARCHITECTURE.md](ARCHITECTURE.md)**. Deployment in **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
@@ -22,7 +29,12 @@ News in → a verifiable MP4 in object storage, in about two minutes.
 
 ## Features
 
-- **Automated news pipeline** — scheduled ET RSS scan → heuristic ranking → render → sign → store → publish
+- **Bring your own keys** — Gemini, Pexels, Unsplash and your YouTube OAuth client are entered in the dashboard, Fernet-encrypted, and stored in your own B2 bucket so they survive a redeploy. Secrets never come back out of the API: you get a four-character tail, enough to tell two keys apart
+- **Connect your own channel** — the full OAuth flow runs in the browser against *your* Google Cloud project. This deployment never holds a credential that can touch anyone else's account, and disconnecting revokes the token at Google rather than only forgetting it
+- **Six content profiles, or write your own** — the niche is data, not code. Sources, ranking weights, narrator voice, audience, hook style, things to never say, visual vocabulary, duration, category and schedule all live in one YAML file
+- **Five trend sources, merged and de-duplicated** — Google Trends, Reddit, Hacker News, YouTube's own most-popular chart and plain RSS, fetched concurrently. Cross-source overlap is the ranking signal, so a story appearing on Trends *and* Reddit *and* a news feed outranks one that appears once
+- **Bring-your-own-video ingest** — upload a finished file and get titles, description, tags, a 1280×720 thumbnail composed from your own footage, an `.srt` caption track and Shorts timestamps. Never re-encoded: a frame is extracted, the audio is transcribed, and the original bytes are what reach YouTube
+- **Automated pipeline** — scheduled multi-source scan → heuristic ranking → render → sign → store → publish
 - **Provenance on every render** — a canonical, SHA-256-bound **Genblaze manifest** recording provider, model and parameters for each stage; written to B2 *and* embedded into the MP4 container, so the file carries its own record wherever it goes
 - **Verifiable in the UI** — the library shows a verified shield per video; open **Provenance** to see the generation chain, per-artefact hashes and a live re-verification
 - **Durable media library on Backblaze B2** — MP4, thumbnail, captions, script and manifest all land in the bucket; playback runs off short-lived presigned URLs, so the bucket stays private and the library survives an ephemeral host
@@ -32,8 +44,8 @@ News in → a verifiable MP4 in object storage, in about two minutes.
 - **Graceful degradation** — every stage has a fallback (video clip → stock photo → Gemini for visuals; cloud TTS → local Kokoro for narration), and the app boots and reports readiness even with nothing configured
 - **Fits the container it's given** — the render reads the cgroup memory limit and scales the number of video scenes to what the host can actually hold, because a render that gets OOM-killed produces nothing at all
 - **Gemini key rotation** — the free tier caps generation at 20 requests *per day per project*; extra keys in `GEMINI_API_KEYS` are rotated to automatically when one reports its daily quota exhausted
-- **Publishes on a fixed daily schedule** — 08:00, 14:00 and 20:00 Asia/Kolkata by default, with the last run recorded in B2 so a redeploy resumes the schedule instead of restarting it
-- **One-click automation** — pick how many top articles to process, toggle auto-publish, hit *Run Automation*
+- **Publishes on a fixed daily schedule** — set per profile (the markets profile uses 08:00/14:00/20:00 IST, the gaming one 12:00/21:00 Pacific), with the last run recorded in B2 so a redeploy resumes the schedule instead of restarting it
+- **One-click automation** — pick how many top stories to process, toggle auto-publish, hit *Run Automation*
 - **Live pipeline view** — the UI shows the **real** backend stage (Fetch → Trend → Script → Visuals → Narration → Subtitles → Assembly → Provenance → Backblaze B2 → Publish)
 - **Pluggable script LLM** — **Gemini** (free tier, thinking disabled for speed) or **Ollama** (local, unlimited)
 - **Subtitles** — auto-timed captions burned in, plus a sidecar `.srt`; font scales with resolution so nothing clips
@@ -46,25 +58,73 @@ News in → a verifiable MP4 in object storage, in about two minutes.
 
 ## How it works (short version)
 
+**Path 1 — automate the whole thing.** The profile's own schedule fires:
+
 ```
-08:00/14:00/20:00 IST ─▶ scan ET RSS ─▶ rank articles ─▶ take top N
-                                                │
-                dedup (skip already-processed) ◀┘
+profile schedule ─▶ scan the profile's sources ─▶ merge + dedupe ─▶ rank ─▶ top N
+                    (Trends · Reddit · HN ·                │
+                     YouTube chart · RSS)                  │
+                          dedup (skip already-processed) ◀─┘
                                                 ▼
-              script → visuals → narration → subtitles → assemble → thumbnail
-                                                │
+              script → visuals → narration → captions → assemble → thumbnail
+                    (written in the profile's voice)       │
                      Genblaze manifest (SHA-256 per artefact) ◀┘
                                                 │
                       embed into MP4  +  upload to Backblaze B2
                                                 │
-                              publish to YouTube (optional)
-                                                │
-                          mark article as processed
+                        publish to your YouTube channel (optional)
 ```
+
+**Path 2 — bring your own video.** No re-encode at any step:
+
+```
+upload ─▶ probe ─▶ extract ONE frame ─────────────▶ compose 1280×720 thumbnail
+             │                                              │
+             └──▶ extract 48 kbps mono audio ─▶ transcribe ─┤
+                                                  │         │
+                                          .srt sidecar      │
+                                                  │         │
+                              titles · description · tags ◀─┘
+                                                  │
+                     ORIGINAL FILE ─▶ YouTube ─▶ attach thumbnail + captions
+```
+
+The rule in path 2 is that nothing touches the pixels. Burning subtitles in
+would cost a full transcode — minutes of CPU and a memory peak a 512 MB
+instance cannot survive — and would degrade footage the creator already graded.
+YouTube renders the `.srt` itself, for free, so the file is uploaded byte for
+byte and the captions are attached afterwards.
+
+### Content profiles
+
+The niche is the only thing that differs between two creators running this. One
+file holds all of it:
+
+```yaml
+id: gaming
+sources:                                  # where ideas come from
+  - { type: reddit, subreddits: [gaming, Games, pcgaming] }
+  - { type: youtube_trending, region: US, category: gaming }
+  - { type: rss, urls: [https://www.polygon.com/rss/index.xml] }
+persona:                                  # how the script sounds
+  voice: a plugged-in gaming host who plays the games and reads the patch notes
+  audience: gamers aged 16 to 32 who follow releases and industry news
+  hook_style: open on the change that will annoy or delight players most
+  avoid: rage-bait framing, spoilers without warning, made-up leaks
+visuals:                                  # what the stock search looks for
+  subjects: [gaming setups, controllers, arcade lights, esports arenas]
+ranking: { recency: 0.55, trend: 0.45, max_age_hours: 24 }
+schedule: { hours: [12, 21], timezone: America/Los_Angeles, top_n: 1 }
+```
+
+`persona.avoid` is not decoration. It is the difference between a publishable
+video and one that should never have been made — the fitness profile forbids
+medical advice and dosage, the entertainment profile forbids gossip about
+private lives, and those lines go into the prompt as hard constraints.
 
 ### Ranking logic
 
-Free and deterministic — no LLM cost. Each fresh article scores in `[0, 1]`:
+Free and deterministic — no LLM cost. Each fresh story scores in `[0, 1]`:
 
 ```
 score = 0.45 · recency  +  0.55 · trend
@@ -372,18 +432,26 @@ MP4. See [ARCHITECTURE.md](ARCHITECTURE.md#performance).
 
 ## Deployment
 
-Deployed on **Railway** at
-[genblaze-production.up.railway.app](https://genblaze-production.up.railway.app).
-The root [Dockerfile](Dockerfile) builds the SPA and serves it from FastAPI, so a
-deploy is **one service, one public URL** — no CORS, nothing to wire together:
+Deployed on **Render** at
+[YOUR-SERVICE.onrender.com](https://YOUR-SERVICE.onrender.com), from the blueprint in
+[render.yaml](render.yaml). The root [Dockerfile](Dockerfile) builds the SPA and
+serves it from FastAPI, so a deploy is **one service, one public URL** — no CORS,
+nothing to wire together:
 
 ```bash
 docker build -t flux .
 docker run -p 8000:8000 --env-file backend/.env flux
 ```
 
-The same image runs on **Railway**, **Render** ([render.yaml](render.yaml)),
-**Fly.io** and any Docker host. Full guide: **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+The same image runs on **Render** ([render.yaml](render.yaml)), **Fly.io**,
+**Koyeb** and any Docker host. Full guide: **[DEPLOYMENT.md](DEPLOYMENT.md)**.
+
+> **The service is kept awake.** Render idles a web service out after ~15 minutes
+> without traffic, so the app pings its own `/ping` every 12 minutes and
+> [a GitHub Actions cron](.github/workflows/keepalive.yml) pings it from outside
+> on the same interval. Both are needed: the self-ping prevents a spin-down, but
+> only an external request can reverse one — once the container is stopped,
+> nothing inside it runs.
 
 > **Ephemeral disk is fine** — B2 owns the library, so restarts and redeploys
 > lose nothing, and the scheduler's own state lives there too.

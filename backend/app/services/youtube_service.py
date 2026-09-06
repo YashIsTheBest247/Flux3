@@ -19,8 +19,13 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# Full youtube scope (covers videos.insert). Must match the stored token's scope.
-SCOPES = ["https://www.googleapis.com/auth/youtube"]
+# Must match what youtube_oauth requested. upload publishes the video;
+# force-ssl is what allows thumbnails.set and captions.insert - an upload-only
+# token fails on both with a bare 403.
+SCOPES = [
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.force-ssl",
+]
 
 
 class YouTubeServiceError(Exception):
@@ -36,8 +41,24 @@ def _load_credentials() -> Credentials:
     """
     import json
 
+    from app.services.credentials_service import PUBLISH_OWN, vault
+
     token_file: Path = settings.YOUTUBE_TOKEN_FILE
-    token_json = (settings.YOUTUBE_TOKEN_JSON or "").strip()
+
+    # Which channel this upload belongs on. In "own" mode only the visitor's
+    # connected token is acceptable - falling back to the deployment's own
+    # channel would publish their video to someone else's account, which is the
+    # worst possible failure mode here, so it fails loudly instead.
+    if vault.publish_mode() == PUBLISH_OWN:
+        token_json = (vault.get("YOUTUBE_TOKEN_JSON") or "").strip()
+        if not token_json:
+            raise YouTubeServiceError(
+                "You chose to publish to your own channel but have not "
+                "connected one yet. Connect it, or switch back to the default "
+                "channel."
+            )
+    else:
+        token_json = (settings.YOUTUBE_TOKEN_JSON or "").strip()
 
     if token_json:
         try:
@@ -86,13 +107,17 @@ def readiness() -> dict:
     """
     import json
 
-    token_json = (settings.YOUTUBE_TOKEN_JSON or "").strip()
+    from app.services.credentials_service import PUBLISH_OWN, vault
+
+    own_mode = vault.publish_mode() == PUBLISH_OWN
+    vault_token = (vault.get("YOUTUBE_TOKEN_JSON") or "").strip()
+    token_json = vault_token if own_mode else (settings.YOUTUBE_TOKEN_JSON or "").strip()
     token_file: Path = settings.YOUTUBE_TOKEN_FILE
     source = None
     detail = None
 
     if token_json:
-        source = "YOUTUBE_TOKEN_JSON"
+        source = "your channel" if own_mode else "default channel"
         try:
             data = json.loads(token_json)
             if not data.get("refresh_token"):
@@ -107,13 +132,23 @@ def readiness() -> dict:
             "configured": False,
             "ready": False,
             "source": None,
-            "error": "No YouTube credentials. Set YOUTUBE_TOKEN_JSON to publish.",
+            "mode": "own" if own_mode else "default",
+            "error": (
+                "You chose your own channel but have not connected one yet."
+                if own_mode else
+                "This deployment has no default channel configured. Set "
+                "YOUTUBE_TOKEN_JSON, or connect your own channel instead."
+            ),
         }
 
     return {
         "configured": True,
         "ready": True,
         "source": source,
+        "mode": "own" if own_mode else "default",
+        "channel_title": vault.get("YOUTUBE_CHANNEL_TITLE", "") if own_mode
+                         else settings.YOUTUBE_DEFAULT_CHANNEL_TITLE,
+        "channel_id": vault.get("YOUTUBE_CHANNEL_ID", "") if own_mode else "",
         "auto_upload": settings.YOUTUBE_AUTO_UPLOAD,
         "privacy_status": settings.YOUTUBE_PRIVACY_STATUS,
         "warning": detail,
@@ -188,3 +223,90 @@ def upload_video(
         raise
     except Exception as exc:  # noqa: BLE001 - surface any client/transport error
         raise YouTubeServiceError(f"Unexpected error during YouTube upload: {exc}") from exc
+
+
+def set_thumbnail(video_id: str, image_path: Path) -> bool:
+    """Attach a custom thumbnail to an uploaded video.
+
+    Returns False rather than raising on the one failure that is not a bug:
+    custom thumbnails require a verified YouTube account, and an unverified
+    channel gets a 403 here on every upload. Losing the whole publish over a
+    thumbnail would be the wrong trade, so the caller logs it and moves on.
+    """
+    image_path = Path(image_path)
+    if not image_path.exists():
+        logger.warning("Thumbnail not found, skipping: %s", image_path)
+        return False
+    try:
+        youtube = _build_client()
+        youtube.thumbnails().set(
+            videoId=video_id,
+            media_body=MediaFileUpload(str(image_path), mimetype="image/jpeg"),
+        ).execute()
+        logger.info("Thumbnail set on %s", video_id)
+        return True
+    except HttpError as exc:
+        if exc.resp.status == 403:
+            logger.warning(
+                "Thumbnail rejected for %s - custom thumbnails need a verified "
+                "YouTube account (youtube.com/verify). The video is published "
+                "and is using an auto-generated frame.", video_id,
+            )
+        else:
+            logger.warning("Could not set thumbnail on %s: %s", video_id, exc)
+        return False
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not set thumbnail on %s: %s", video_id, exc)
+        return False
+
+
+def upload_caption(video_id: str, srt_path: Path, language: str = "en",
+                   name: str = "Captions") -> bool:
+    """Attach an SRT caption track to an uploaded video.
+
+    This is why the ingest pipeline never re-encodes an uploaded file. Burning
+    subtitles into the pixels costs a full transcode - minutes of CPU and a
+    memory peak a 512 MB instance cannot survive - whereas YouTube will happily
+    take the .srt as a sidecar and render it itself, for free, in whatever
+    player the viewer is using.
+    """
+    srt_path = Path(srt_path)
+    if not srt_path.exists():
+        logger.warning("Caption file not found, skipping: %s", srt_path)
+        return False
+    try:
+        youtube = _build_client()
+        youtube.captions().insert(
+            part="snippet",
+            body={"snippet": {"videoId": video_id, "language": language, "name": name}},
+            media_body=MediaFileUpload(str(srt_path), mimetype="application/octet-stream"),
+        ).execute()
+        logger.info("Caption track uploaded for %s", video_id)
+        return True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not upload captions for %s: %s", video_id, exc)
+        return False
+
+
+def channel_summary() -> Optional[dict]:
+    """Channel title, subscriber and view counts for the dashboard header."""
+    try:
+        youtube = _build_client()
+        response = youtube.channels().list(part="snippet,statistics", mine=True).execute()
+        items = response.get("items") or []
+        if not items:
+            return None
+        item = items[0]
+        stats = item.get("statistics", {})
+        snippet = item.get("snippet", {})
+        return {
+            "id": item.get("id"),
+            "title": snippet.get("title"),
+            "thumbnail": (snippet.get("thumbnails", {}).get("default") or {}).get("url"),
+            "subscribers": stats.get("subscriberCount"),
+            "views": stats.get("viewCount"),
+            "videos": stats.get("videoCount"),
+        }
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not read channel summary: %s", exc)
+        return None

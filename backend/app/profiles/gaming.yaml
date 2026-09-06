@@ -1,0 +1,48 @@
+id: gaming
+name: Gaming
+tagline: Patches, drama, and what to play next
+emoji: "\U0001F3AE"
+accent: "#A05BEF"
+
+sources:
+  - type: reddit
+    limit: 15
+    subreddits: [gaming, Games, pcgaming]
+  - type: rss
+    limit: 20
+    urls:
+      - https://www.polygon.com/rss/index.xml
+      - https://kotaku.com/rss
+      - https://www.pcgamer.com/rss/
+  - type: youtube_trending
+    region: US
+    category: gaming
+    limit: 20
+
+persona:
+  voice: a plugged-in gaming host who plays the games and reads the patch notes
+  audience: gamers aged 16 to 32 who follow releases and industry news
+  tone: energetic but informed; opinions are fine, invented facts are not
+  hook_style: open on the change that will annoy or delight players most
+  cta: Follow so you never miss a patch that matters
+  avoid: rage-bait framing, spoilers without warning, made-up leaks
+
+visuals:
+  style: vivid neon-lit gaming photography, high contrast, purple and cyan
+  subjects: gaming setups, controllers, arcade lights, esports arenas, PC builds
+  prefer_clips: true
+
+format:
+  duration: 45
+  youtube_category: "20"
+  hashtags: ["#gaming", "#gamingnews", "#shorts"]
+
+ranking:
+  recency: 0.55
+  trend: 0.45
+  max_age_hours: 24
+
+schedule:
+  hours: [12, 21]
+  timezone: America/Los_Angeles
+  top_n: 1

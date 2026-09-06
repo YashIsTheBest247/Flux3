@@ -266,7 +266,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # Flux is B2-first: every finished render (mp4 + thumbnail + srt + script +
     # provenance manifest) is uploaded to B2 and served from there. Local disk is
-    # scratch space only, which is what makes ephemeral hosts (Render/Railway/
+    # scratch space only, which is what makes ephemeral hosts (Render/Fly.io/
     # Fly/HF Spaces free tiers) viable — the library survives a container restart.
     B2_KEY_ID: str = Field(default="", env="B2_KEY_ID")
     B2_APP_KEY: str = Field(default="", env="B2_APP_KEY")
@@ -361,6 +361,22 @@ class Settings(BaseSettings):
     YOUTUBE_DEFAULT_TAGS: str = Field(default="education,flux,ai", env="YOUTUBE_DEFAULT_TAGS")
     SECRETS_DIR: Optional[Path] = Field(default=None)
     YOUTUBE_CLIENT_SECRET_FILE: Optional[Path] = Field(default=None)
+
+    # OAuth client the browser flow uses. Normally set through the dashboard
+    # rather than here: a creator brings their own Google Cloud project so the
+    # uploads land on their channel and the quota is theirs, not this app's.
+    YOUTUBE_CLIENT_ID: str = Field(default="", env="YOUTUBE_CLIENT_ID")
+    YOUTUBE_CLIENT_SECRET: str = Field(default="", env="YOUTUBE_CLIENT_SECRET")
+    # Filled in by the OAuth callback and stored in the credential vault.
+    YOUTUBE_CHANNEL_TITLE: str = Field(default="", env="YOUTUBE_CHANNEL_TITLE")
+    YOUTUBE_CHANNEL_ID: str = Field(default="", env="YOUTUBE_CHANNEL_ID")
+    # Shown in the UI as the channel a visitor publishes to by default. Purely
+    # cosmetic - the actual destination is whatever YOUTUBE_TOKEN_JSON belongs
+    # to - but "publishes to Flux Daily" reads far better than "the default
+    # channel" when someone is deciding whether to opt out.
+    YOUTUBE_DEFAULT_CHANNEL_TITLE: str = Field(
+        default="the Flux demo channel", env="YOUTUBE_DEFAULT_CHANNEL_TITLE"
+    )
     YOUTUBE_TOKEN_FILE: Optional[Path] = Field(default=None)
     # Deployment fallback: paste the contents of youtube_token.json here when the
     # filesystem is ephemeral/read-only (e.g. Render). Takes priority over the file.
@@ -401,6 +417,68 @@ class Settings(BaseSettings):
     TRENDS_AUTO_PUBLISH: bool = Field(default=False, env="TRENDS_AUTO_PUBLISH")
     TRENDS_RUN_ON_STARTUP: bool = Field(default=False, env="TRENDS_RUN_ON_STARTUP")
     TRENDS_STATE_FILE: Optional[Path] = Field(default=None)
+
+    # Credential vault -----------------------------------------------------
+    # Encrypts the keys entered through the dashboard. Falls back to the B2 app
+    # key when unset so the vault works on a fresh deploy with nothing extra to
+    # configure; see credentials_service for why that tradeoff was made.
+    FLUX_SECRET_KEY: str = Field(default="", env="FLUX_SECRET_KEY")
+
+    # Public origin, used to build the OAuth redirect URI. Render injects
+    # RENDER_EXTERNAL_URL, so this is only needed on hosts that do not.
+    PUBLIC_BASE_URL: str = Field(default="", env="PUBLIC_BASE_URL")
+
+    # Content profile chosen in the dashboard. The profile decides which trend
+    # sources are scanned and how the script is written; see profiles_service.
+    CONTENT_PROFILE: str = Field(default="tech_news", env="CONTENT_PROFILE")
+
+    # Bring-your-own-video ingest ------------------------------------------
+    # Capped because Render's disk is both small and ephemeral: the upload, the
+    # extracted frame and the audio all live there at once, and a few large
+    # files back to back would fill it.
+    INGEST_MAX_MB: int = Field(default=400, env="INGEST_MAX_MB")
+
+    # Keep-alive (Render) ------------------------------------------------
+    # Render spins a web service down after ~15 minutes with no inbound
+    # traffic, and a cold start costs the better part of a minute. Pinging the
+    # service's own public URL on a shorter interval keeps it warm.
+    #
+    # This only PREVENTS a spin-down; it cannot reverse one. Once the instance
+    # is stopped nothing inside it runs, so an external pinger
+    # (.github/workflows/keepalive.yml) is the primary defence and this is the
+    # backstop. Render injects RENDER_EXTERNAL_URL automatically.
+    KEEPALIVE_ENABLED: bool = Field(default=True, env="KEEPALIVE_ENABLED")
+    KEEPALIVE_MINUTES: float = Field(default=12.0, env="KEEPALIVE_MINUTES")
+    KEEPALIVE_URL: str = Field(default="", env="KEEPALIVE_URL")
+    RENDER_EXTERNAL_URL: str = Field(default="", env="RENDER_EXTERNAL_URL")
+
+    @property
+    def public_base_url(self) -> str:
+        """The origin this deployment is reachable at, without a trailing slash.
+
+        Used for the OAuth redirect URI, which Google matches character for
+        character - a trailing slash or a missing scheme is a redirect_uri_mismatch
+        rather than a helpful error.
+        """
+        base = (self.PUBLIC_BASE_URL or self.RENDER_EXTERNAL_URL or "").strip().rstrip("/")
+        if base and not base.startswith(("http://", "https://")):
+            base = f"https://{base}"
+        return base
+
+    @property
+    def keepalive_target(self) -> Optional[str]:
+        """The URL the self-ping hits, or None when there is nothing to ping.
+
+        Points at /ping rather than /health on purpose: /health calls out to
+        Backblaze and YouTube on every request, and 120 of those a day is pure
+        waste when all the ping has to do is arrive.
+        """
+        base = (self.KEEPALIVE_URL or self.RENDER_EXTERNAL_URL or "").strip().rstrip("/")
+        if not base:
+            return None
+        if not base.startswith(("http://", "https://")):
+            base = f"https://{base}"
+        return f"{base}/ping"
 
     @property
     def trends_schedule_hours(self) -> List[int]:

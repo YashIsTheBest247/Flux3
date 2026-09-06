@@ -1,0 +1,49 @@
+id: tech_news
+name: Tech News
+tagline: What shipped, what broke, what it means
+emoji: "\U0001F5A5"
+accent: "#5B8DEF"
+
+sources:
+  - type: hackernews
+    limit: 25
+  - type: rss
+    limit: 20
+    urls:
+      - https://techcrunch.com/feed/
+      - https://www.theverge.com/rss/index.xml
+      - https://arstechnica.com/feed/
+  - type: reddit
+    limit: 12
+    subreddits: [technology, programming]
+  - type: google_trends
+    geo: US
+    limit: 20
+
+persona:
+  voice: a fast, skeptical tech explainer who has read the actual release notes
+  audience: developers, founders and tech-adjacent people aged 20 to 40
+  tone: direct and unhyped; explain the mechanism, not the press release
+  hook_style: open on the surprising number or the thing that broke
+  cta: Follow for the tech news that actually matters
+  avoid: breathless hype, "game changer", "revolutionary", vague futurism
+
+visuals:
+  style: clean modern product photography, screens and hardware, cool tones
+  subjects: laptops, server racks, circuit boards, offices, phone screens
+  prefer_clips: true
+
+format:
+  duration: 45
+  youtube_category: "28"
+  hashtags: ["#tech", "#technews", "#shorts"]
+
+ranking:
+  recency: 0.6
+  trend: 0.4
+  max_age_hours: 18
+
+schedule:
+  hours: [9, 18]
+  timezone: America/New_York
+  top_n: 1
