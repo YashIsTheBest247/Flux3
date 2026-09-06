@@ -160,6 +160,12 @@ async def health_check():
         "profile": {
             "active": profiles_store.active_id(),
             "name": profiles_store.active().get("name"),
+            # The source TYPES, so the automation panel can say what it is
+            # scanning without a second round trip.
+            "sources": [
+                s.get("type") for s in (profiles_store.active().get("sources") or [])
+                if s.get("type")
+            ],
         },
     }
 

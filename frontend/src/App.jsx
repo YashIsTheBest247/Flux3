@@ -317,6 +317,10 @@ export function App() {
                     onGenerate={handleGenerateFromArticle}
                     onRunAutomation={handleRunAutomation}
                     isGenerating={isGenerating || isPolling}
+                    profileName={readiness?.profile?.name}
+                    profileSources={readiness?.profile?.sources}
+                    channelTitle={readiness?.youtube?.channel_title}
+                    channelReady={Boolean(readiness?.youtube?.ready)}
                 />
                 <PipelineSection
                     mode={pipeline.mode}

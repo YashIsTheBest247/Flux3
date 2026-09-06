@@ -282,12 +282,22 @@ def scheduler_status() -> dict:
         job = _scheduler.get_job(JOB_ID)
         if job and job.next_run_time:
             next_run = job.next_run_time.isoformat()
+    # Report the schedule the scheduler ACTUALLY builds from - the active
+    # profile's - not the env defaults. These two disagreed: the job ran at the
+    # profile's hours while this endpoint (and therefore the UI) advertised
+    # 08:00/14:00/20:00 IST from TRENDS_SCHEDULE_HOURS, which is a miserable
+    # thing to debug when a video appears at an hour nobody configured.
+    profile = profiles_store.active()
+    schedule = profile.get("schedule") or {}
+    hours = [int(h) for h in schedule.get("hours", [])] or settings.trends_schedule_hours
+
     return {
         "enabled": settings.TRENDS_ENABLED,
         "running": running,
-        "schedule_hours": settings.trends_schedule_hours,
-        "timezone": settings.TRENDS_TIMEZONE,
-        "top_n": settings.TRENDS_TOP_N,
+        "profile": {"id": profile.get("id"), "name": profile.get("name")},
+        "schedule_hours": hours,
+        "timezone": schedule.get("timezone") or settings.TRENDS_TIMEZONE,
+        "top_n": int(schedule.get("top_n") or settings.TRENDS_TOP_N),
         "auto_publish": settings.TRENDS_AUTO_PUBLISH,
         # Whether a scheduled render actually reaches YouTube: the per-run flag
         # above OR the global switch is enough. Reported here because the two

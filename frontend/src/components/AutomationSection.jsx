@@ -81,7 +81,15 @@ function ArticleRow({ article, index, willProcess, onGenerate, busy }) {
     );
 }
 
-export function AutomationSection({ onGenerate, onRunAutomation, isGenerating }) {
+export function AutomationSection({
+    onGenerate,
+    onRunAutomation,
+    isGenerating,
+    profileName,
+    profileSources,
+    channelTitle,
+    channelReady,
+}) {
     const [articles, setArticles] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
@@ -95,7 +103,7 @@ export function AutomationSection({ onGenerate, onRunAutomation, isGenerating })
         try {
             setArticles(await fetchTrending(10));
         } catch (err) {
-            setError(err.message || 'Could not load trending articles.');
+            setError(err.message || 'Could not load trending stories.');
         } finally {
             setLoading(false);
         }
@@ -126,8 +134,8 @@ export function AutomationSection({ onGenerate, onRunAutomation, isGenerating })
     }
 
     return (
-        <section id="automation" className="mx-auto w-full max-w-[1600px] scroll-mt-20 px-5 py-14 lg:px-8">
-            <div className="glass rounded-2xl p-6 lg:p-8">
+        <section id="automation" className="scroll-mt-6 px-3 sm:px-4">
+            <div className="sheet mx-auto mt-6 w-full max-w-[1560px] p-6 sm:p-10">
                 {/* header */}
                 <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
                     <div className="flex items-start gap-4">
@@ -138,11 +146,13 @@ export function AutomationSection({ onGenerate, onRunAutomation, isGenerating })
                             </svg>
                         </span>
                         <div>
-                            <h2 className="display text-2xl font-bold tracking-tight sm:text-3xl">
-                                Economic Times Automation
+                            <h2 className="display text-2xl tracking-tight sm:text-3xl">
+                                {profileName ? `${profileName} automation` : 'Automation'}
                             </h2>
                             <p className="mt-1 text-sm text-muted">
-                                Automatically convert trending news into viral videos
+                                {profileSources?.length
+                                    ? `Scanning ${profileSources.join(', ')} for this channel.`
+                                    : 'Turns what is trending in your niche into finished shorts.'}
                             </p>
                         </div>
                     </div>
@@ -161,8 +171,8 @@ export function AutomationSection({ onGenerate, onRunAutomation, isGenerating })
                 <div className="mb-6 divide-y divide-tint/10 rounded-xl border border-tint/10 bg-tint/[0.02]">
                     <div className="flex flex-wrap items-center justify-between gap-4 p-5">
                         <div>
-                            <p className="text-sm font-semibold text-txt">Number of Articles</p>
-                            <p className="text-xs text-muted">Process top N trending articles</p>
+                            <p className="text-sm font-semibold text-txt">How many stories</p>
+                            <p className="text-xs text-muted">The top ranked stories become one video each.</p>
                         </div>
                         <div className="flex items-center gap-1.5 rounded-full border border-tint/12 bg-tint/[0.04] p-1">
                             {COUNT_OPTIONS.map((n) => (
@@ -176,7 +186,7 @@ export function AutomationSection({ onGenerate, onRunAutomation, isGenerating })
                                             : 'text-muted hover:text-txt'
                                     }`}
                                 >
-                                    {n} article{n > 1 ? 's' : ''}
+                                    {n} video{n > 1 ? 's' : ''}
                                 </button>
                             ))}
                         </div>
@@ -184,16 +194,21 @@ export function AutomationSection({ onGenerate, onRunAutomation, isGenerating })
 
                     <div className="flex flex-wrap items-center justify-between gap-4 p-5">
                         <div>
-                            <p className="text-sm font-semibold text-txt">Auto-Publish</p>
-                            <p className="text-xs text-muted">Automatically publish to YouTube</p>
+                            <p className="text-sm font-semibold text-txt">Auto-publish</p>
+                            <p className="text-xs text-muted">
+                                {channelReady
+                                    ? `Uploads to ${channelTitle || 'your connected channel'} when the render finishes.`
+                                    : 'No channel connected yet — renders will be stored but not uploaded.'}
+                            </p>
                         </div>
                         <button
                             type="button"
                             role="switch"
                             aria-checked={autoPublish}
                             onClick={() => setAutoPublish((v) => !v)}
-                            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
-                                autoPublish ? 'bg-accent' : 'bg-tint/25'
+                            disabled={!channelReady}
+                            className={`relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+                                autoPublish && channelReady ? 'bg-accent' : 'bg-tint/25'
                             }`}
                         >
                             <span
@@ -223,7 +238,7 @@ export function AutomationSection({ onGenerate, onRunAutomation, isGenerating })
                 {/* trending list */}
                 <div className="mt-9">
                     <h3 className="mb-4 text-sm font-semibold text-txt">
-                        Top Trending Articles{' '}
+                        Top ranked right now{' '}
                         <span className="text-muted">
                             (showing top {visible.length}
                             {articles.length > visible.length ? ` of ${articles.length} ranked` : ''})
@@ -242,7 +257,7 @@ export function AutomationSection({ onGenerate, onRunAutomation, isGenerating })
                         </div>
                     ) : visible.length === 0 ? (
                         <p className="rounded-xl border border-tint/10 p-6 text-center text-sm text-muted">
-                            No fresh trending articles right now.
+                            No fresh stories right now.
                         </p>
                     ) : (
                         <div className="grid gap-3">

@@ -35,6 +35,7 @@ export function UploadSection({ youtubeReady }) {
 
     const inputRef = useRef(null);
     const pollRef = useRef(null);
+    const [elapsed, setElapsed] = useState(0);
 
     useEffect(() => {
         listIngestJobs()
@@ -57,6 +58,18 @@ export function UploadSection({ youtubeReady }) {
         setFile(nextFile);
     }
 
+    // A second-by-second clock while a job runs. Transcription and the metadata
+    // call can each sit for several seconds with no stage change, and a frozen
+    // panel during those reads as a hang.
+    useEffect(() => {
+        if (!job?.active) return undefined;
+        const started = job.started_at ? job.started_at * 1000 : Date.now();
+        const tick = () => setElapsed(Math.max(0, Math.round((Date.now() - started) / 1000)));
+        tick();
+        const timer = window.setInterval(tick, 1000);
+        return () => window.clearInterval(timer);
+    }, [job?.active, job?.started_at]);
+
     function watch(jobId) {
         window.clearInterval(pollRef.current);
         pollRef.current = window.setInterval(async () => {
@@ -71,7 +84,10 @@ export function UploadSection({ youtubeReady }) {
                 // A transient failure is not worth abandoning the watch over;
                 // the job is still running server-side either way.
             }
-        }, 2000);
+            // 1s, not 2s. The whole job can finish in about eleven seconds, so
+            // a two-second poll skipped straight past most of the stages and
+            // the panel only ever showed the end state.
+        }, 1000);
     }
 
     async function start() {
@@ -255,34 +271,68 @@ export function UploadSection({ youtubeReady }) {
                 <aside className="space-y-6">
                     {job ? (
                         <div className="glass p-6 sm:p-8">
-                            <h3 className="display text-lg">{job.filename}</h3>
-                            <p className="mt-1 text-sm text-muted">{job.message}</p>
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                    <h3 className="display truncate text-lg">{job.filename}</h3>
+                                    <p className="mt-1 text-sm text-muted">{job.message}</p>
+                                </div>
+                                {/* The clock is what proves the job is alive during
+                                    the long, silent stages — transcription and the
+                                    metadata call can each sit for several seconds
+                                    with no stage change, and a frozen panel during
+                                    those reads as a hang. */}
+                                <span className="shrink-0 font-mono text-xs tabular-nums text-faint">
+                                    {formatTime(elapsed)}
+                                </span>
+                            </div>
 
-                            <ol className="mt-6 space-y-2.5">
+                            <div className="mt-5 h-1 overflow-hidden rounded-full bg-tint/10">
+                                <div
+                                    className={`h-full rounded-full transition-all duration-500 ease-out ${
+                                        job.error ? 'bg-red-500' : 'bg-accent'
+                                    }`}
+                                    style={{ width: `${Math.max(4, job.progress ?? 0)}%` }}
+                                />
+                            </div>
+
+                            <ol className="mt-6 space-y-1">
                                 {STAGES.map((stage, index) => {
-                                    const done = activeStageIndex > index || job.stage === 'done';
-                                    const current = job.stage === stage.key;
+                                    const finished = job.stage === 'done';
+                                    const done =
+                                        finished || (activeStageIndex > index && activeStageIndex !== -1);
+                                    const current = job.stage === stage.key && !finished;
+                                    const failed = job.stage === 'error' && index === activeStageIndex;
                                     return (
-                                        <li key={stage.key} className="flex items-center gap-3 text-sm">
+                                        <li
+                                            key={stage.key}
+                                            className={`flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm transition-colors ${
+                                                current ? 'bg-accent/[0.07]' : ''
+                                            }`}
+                                        >
+                                            <StageMark done={done} current={current} failed={failed} />
                                             <span
-                                                className={`h-1.5 w-1.5 rounded-full ${
+                                                className={
                                                     current
-                                                        ? 'bg-accent'
+                                                        ? 'font-medium text-txt'
                                                         : done
-                                                          ? 'bg-accent/40'
-                                                          : 'bg-tint/20'
-                                                }`}
-                                            />
-                                            <span className={current ? 'text-txt' : done ? 'text-muted' : 'text-faint'}>
+                                                          ? 'text-muted'
+                                                          : 'text-faint'
+                                                }
+                                            >
                                                 {stage.label}
                                             </span>
+                                            {current ? (
+                                                <span className="ml-auto text-[0.65rem] uppercase tracking-[0.14em] text-accent">
+                                                    running
+                                                </span>
+                                            ) : null}
                                         </li>
                                     );
                                 })}
                             </ol>
 
                             {job.error ? (
-                                <p className="mt-5 rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                                <p className="mt-5 rounded-xl border border-red-500/25 bg-red-500/[0.07] px-4 py-3 text-sm text-red-700">
                                     {job.error}
                                 </p>
                             ) : null}
@@ -470,6 +520,47 @@ function ResultPanel({ result }) {
             ) : null}
         </div>
     );
+}
+
+/**
+ * One stage's marker.
+ *
+ * Three genuinely distinguishable states rather than three shades of the same
+ * dot: a tick for finished, a pulsing ring for the one running now, a hollow
+ * circle for not yet reached. The old version drew every state as a small
+ * circle in a slightly different opacity, which is why a completed job looked
+ * like nothing had happened.
+ */
+function StageMark({ done, current, failed }) {
+    if (failed) {
+        return (
+            <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-red-500 text-white">
+                <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round">
+                    <path d="M6 6l12 12M18 6L6 18" />
+                </svg>
+            </span>
+        );
+    }
+    if (done) {
+        return (
+            <span className="grid h-4 w-4 shrink-0 place-items-center rounded-full bg-accent text-white">
+                <svg viewBox="0 0 24 24" className="h-2.5 w-2.5" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 13l4 4L19 7" />
+                </svg>
+            </span>
+        );
+    }
+    if (current) {
+        return (
+            <span className="relative grid h-4 w-4 shrink-0 place-items-center">
+                {/* The ping is the only thing on screen during a slow stage that
+                    distinguishes "still working" from "stuck". */}
+                <span className="absolute inline-flex h-4 w-4 animate-ping rounded-full bg-accent/40" />
+                <span className="relative h-2 w-2 rounded-full bg-accent" />
+            </span>
+        );
+    }
+    return <span className="h-4 w-4 shrink-0 rounded-full border border-tint/20" />;
 }
 
 function Stat({ label, value }) {
