@@ -304,6 +304,7 @@ export function App() {
                     onNavigate={scrollToSection}
                     profileName={readiness?.profile?.name}
                     channelTitle={readiness?.youtube?.channel_title}
+                    channelUrl={readiness?.youtube?.channel_url}
                     publishMode={readiness?.youtube?.mode}
                 />
                 <Editorial

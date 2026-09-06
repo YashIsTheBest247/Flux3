@@ -44,6 +44,9 @@ ranking:
   max_age_hours: 18
 
 schedule:
-  hours: [9, 18]
+  # Three slots: morning, midday and evening Eastern. Spread rather than
+  # clustered, because three uploads in one hour reads as a dump and YouTube
+  # gives each one less of a chance.
+  hours: [9, 14, 18]
   timezone: America/New_York
   top_n: 1

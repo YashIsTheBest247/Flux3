@@ -377,6 +377,10 @@ class Settings(BaseSettings):
     YOUTUBE_DEFAULT_CHANNEL_TITLE: str = Field(
         default="the Flux demo channel", env="YOUTUBE_DEFAULT_CHANNEL_TITLE"
     )
+    # Public link for the channel badge in the header. A handle URL
+    # (youtube.com/@name) is fine here; the /channel/<id> form is more durable
+    # because a handle is released the moment it is changed.
+    YOUTUBE_CHANNEL_URL: str = Field(default="", env="YOUTUBE_CHANNEL_URL")
     YOUTUBE_TOKEN_FILE: Optional[Path] = Field(default=None)
     # Deployment fallback: paste the contents of youtube_token.json here when the
     # filesystem is ephemeral/read-only (e.g. Render). Takes priority over the file.

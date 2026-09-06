@@ -104,3 +104,6 @@ htmlcov/
 *.tmp
 *.temp
 .cache/
+
+# Generated paste-block for Railway variables — contains real secrets.
+railway.env.filled.txt

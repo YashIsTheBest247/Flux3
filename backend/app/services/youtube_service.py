@@ -179,11 +179,27 @@ def readiness() -> dict:
         "mode": "own" if own_mode else "default",
         "channel_title": vault.get("YOUTUBE_CHANNEL_TITLE", "") if own_mode
                          else settings.YOUTUBE_DEFAULT_CHANNEL_TITLE,
+        "channel_url": _channel_url(own_mode),
         "channel_id": vault.get("YOUTUBE_CHANNEL_ID", "") if own_mode else "",
         "auto_upload": settings.YOUTUBE_AUTO_UPLOAD,
         "privacy_status": settings.YOUTUBE_PRIVACY_STATUS,
         "warning": detail,
     }
+
+
+def _channel_url(own_mode: bool) -> str:
+    """A public link to whichever channel this deployment publishes to.
+
+    Prefers the id form for a connected channel because a handle is released
+    the moment its owner changes it, and can then be claimed by anyone.
+    """
+    from app.services.credentials_service import vault
+
+    if own_mode:
+        channel_id = vault.get("YOUTUBE_CHANNEL_ID", "")
+        if channel_id:
+            return f"https://www.youtube.com/channel/{channel_id}"
+    return (settings.YOUTUBE_CHANNEL_URL or "").strip()
 
 
 def _build_client():

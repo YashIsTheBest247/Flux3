@@ -12,7 +12,7 @@ import { ReelsMark, ShortsMark, YouTubeMark } from './Visuals.jsx';
  * it — a full word floating in the middle would read as a heading, whereas a
  * cropped one reads as print.
  */
-export function Hero({ onNavigate, profileName, channelTitle, publishMode }) {
+export function Hero({ onNavigate, profileName, channelTitle, channelUrl, publishMode }) {
     return (
         <section id="top" className="px-3 pt-3 sm:px-4 sm:pt-4">
             <div className="relative mx-auto w-full max-w-[1560px] overflow-hidden rounded-[1.5rem] bg-[#12100E] grain sm:rounded-[2rem]">
@@ -131,10 +131,26 @@ export function Hero({ onNavigate, profileName, channelTitle, publishMode }) {
                         </span>
                     ) : null}
                     {channelTitle ? (
-                        <span className="flex items-center gap-1.5 rounded-full bg-black/35 px-3 py-1 text-[0.62rem] uppercase tracking-[0.14em] text-white/80 backdrop-blur">
-                            <YouTubeMark className="h-3 w-3" />
-                            {publishMode === 'own' ? channelTitle : `via ${channelTitle}`}
-                        </span>
+                        // A link when we know where the channel lives, plain text
+                        // otherwise - a badge that looks clickable and is not is
+                        // worse than one that never invited the click.
+                        channelUrl ? (
+                            <a
+                                href={channelUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                title={`Open ${channelTitle} on YouTube`}
+                                className="flex items-center gap-1.5 rounded-full bg-black/35 px-3 py-1 text-[0.62rem] uppercase tracking-[0.14em] text-white/80 backdrop-blur transition-colors hover:bg-black/55 hover:text-white"
+                            >
+                                <YouTubeMark className="h-3 w-3" />
+                                {publishMode === 'own' ? channelTitle : `via ${channelTitle}`}
+                            </a>
+                        ) : (
+                            <span className="flex items-center gap-1.5 rounded-full bg-black/35 px-3 py-1 text-[0.62rem] uppercase tracking-[0.14em] text-white/80 backdrop-blur">
+                                <YouTubeMark className="h-3 w-3" />
+                                {publishMode === 'own' ? channelTitle : `via ${channelTitle}`}
+                            </span>
+                        )
                     ) : null}
                 </div>
             </div>
