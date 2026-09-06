@@ -32,10 +32,10 @@ class Settings(BaseSettings):
     
     @property
     def cors_origins_list(self) -> List[str]:
-        """Parse CORS_ORIGINS string into list"""
-        if isinstance(self.CORS_ORIGINS, str):
-            return [origin.strip() for origin in self.CORS_ORIGINS.split(",")]
-        return self.CORS_ORIGINS
+        """Parse CORS_ORIGINS into a list. Trailing slashes are stripped because
+        browsers send the Origin header without one (an exact match would fail)."""
+        raw = self.CORS_ORIGINS if isinstance(self.CORS_ORIGINS, str) else ",".join(self.CORS_ORIGINS)
+        return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]
     
     # API Keys
     GEMINI_API_KEY: str = Field(..., env="GEMINI_API_KEY")
