@@ -124,3 +124,36 @@ async def stream_video(video_name: str):
     except Exception as e:
         logger.error(f"Failed to stream video: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to stream video: {str(e)}")
+
+
+@router.delete("/{video_name}")
+async def delete_video(video_name: str):
+    """
+    Delete a video and its thumbnail from the library.
+    """
+    try:
+        video_dir = settings.STATIC_DIR / "videos"
+        # Prevent path traversal: only allow a bare filename inside video_dir.
+        safe_name = os.path.basename(video_name)
+        if safe_name != video_name or not safe_name:
+            raise HTTPException(status_code=400, detail="Invalid video name")
+
+        video_path = video_dir / safe_name
+        if not video_path.exists():
+            raise HTTPException(status_code=404, detail="Video not found")
+
+        video_path.unlink()
+
+        # Remove the matching thumbnail if present.
+        thumb_path = video_dir / f"{os.path.splitext(safe_name)[0]}.jpg"
+        if thumb_path.exists():
+            thumb_path.unlink()
+
+        logger.info(f"Deleted video: {safe_name}")
+        return {"success": True, "message": f"Deleted {safe_name}"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete video: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to delete video: {str(e)}")

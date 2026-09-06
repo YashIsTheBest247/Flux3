@@ -50,12 +50,23 @@ export default {
                     '0%': { opacity: '0', transform: 'translateY(12px)' },
                     '100%': { opacity: '1', transform: 'translateY(0)' },
                 },
+                fadeIn: {
+                    '0%': { opacity: '0' },
+                    '100%': { opacity: '1' },
+                },
+                popIn: {
+                    '0%': { opacity: '0', transform: 'scale(0.9) translateY(10px)' },
+                    '60%': { opacity: '1', transform: 'scale(1.02) translateY(0)' },
+                    '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+                },
             },
             animation: {
                 floaty: 'floaty 6s ease-in-out infinite',
                 beam: 'beam 5s ease-in-out infinite',
                 marquee: 'marquee 30s linear infinite',
                 fadeup: 'fadeup 0.6s ease',
+                fadeIn: 'fadeIn 0.2s ease-out',
+                popIn: 'popIn 0.28s cubic-bezier(0.34, 1.56, 0.64, 1)',
             },
         },
     },

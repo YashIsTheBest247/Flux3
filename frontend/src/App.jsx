@@ -5,9 +5,10 @@ import { CreatorPanel } from './components/CreatorPanel.jsx';
 import { PipelineSection } from './components/PipelineSection.jsx';
 import { LibrarySection } from './components/LibrarySection.jsx';
 import { DevFooter } from './components/DevFooter.jsx';
+import { ConfirmDialog } from './components/ConfirmDialog.jsx';
 import { pipelineSteps } from './data/options.js';
 import { buildVideoPayload } from './lib/payload.js';
-import { generateVideo, listVideos } from './api/videos.js';
+import { generateVideo, listVideos, deleteVideo } from './api/videos.js';
 
 const idlePipeline = {
     mode: 'idle',
@@ -22,9 +23,11 @@ export function App() {
     const [pipeline, setPipeline] = useState(idlePipeline);
     const [searchQuery, setSearchQuery] = useState('');
     const [newFilename, setNewFilename] = useState(null);
+    const [pendingDelete, setPendingDelete] = useState(null);
 
     const pollTimerRef = useRef(null);
     const stepTimerRef = useRef(null);
+    const generatingRef = useRef(false);
 
     const refreshLibrary = useCallback(async () => {
         try {
@@ -104,10 +107,30 @@ export function App() {
         }, 5000);
     }
 
+    async function confirmDelete() {
+        const target = pendingDelete;
+        setPendingDelete(null);
+        if (!target) return;
+        try {
+            await deleteVideo(target.name);
+            await refreshLibrary();
+        } catch (error) {
+            console.error('Failed to delete video:', error);
+            window.alert(error.message || 'Could not delete the video.');
+        }
+    }
+
     async function handleGenerate(formValues) {
+        // Guard against double-submit (rapid clicks / Enter+click) firing two renders.
+        if (generatingRef.current || isGenerating || isPolling) {
+            throw new Error('A render is already in progress. Please wait for it to finish.');
+        }
+        generatingRef.current = true;
+
         setIsGenerating(true);
         setNewFilename(null);
         runPipelineStep(0);
+        scrollToSection('pipeline');
 
         try {
             const payload = buildVideoPayload(formValues);
@@ -131,6 +154,7 @@ export function App() {
             throw error;
         } finally {
             setIsGenerating(false);
+            generatingRef.current = false;
         }
     }
 
@@ -163,9 +187,22 @@ export function App() {
                     isGenerating={isGenerating}
                     isPolling={isPolling}
                     newFilename={newFilename}
+                    onRequestDelete={setPendingDelete}
                 />
             </main>
             <DevFooter />
+            <ConfirmDialog
+                open={Boolean(pendingDelete)}
+                title="Delete this render?"
+                message={
+                    pendingDelete
+                        ? `"${pendingDelete.title}" will be permanently removed from the library.`
+                        : ''
+                }
+                confirmLabel="Delete"
+                onConfirm={confirmDelete}
+                onCancel={() => setPendingDelete(null)}
+            />
         </div>
     );
 }

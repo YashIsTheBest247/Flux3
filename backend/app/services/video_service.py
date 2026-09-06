@@ -9,6 +9,7 @@ import time
 import re
 import shutil
 import subprocess
+import threading
 from pathlib import Path
 from typing import Optional
 from fastapi import BackgroundTasks
@@ -23,6 +24,12 @@ from imagegen.generate_script import VideoScriptGenerator
 # loaded when an actual render runs in the background.
 
 logger = logging.getLogger(__name__)
+
+# Renders share working directories (resources/images, resources/audio,
+# resources/scripts/script.json) and clean them at the start of each run, so two
+# renders MUST NOT run concurrently or they corrupt each other. This lock
+# serializes every render (manual + trending) to one at a time.
+_render_lock = threading.Lock()
 
 
 class VideoGenerationService:
@@ -91,9 +98,18 @@ class VideoGenerationService:
     
     def _generate_video_task(self, request: VideoGenerationRequest, video_filename: str):
         """
-        Background task for video generation
-        This is the main pipeline that orchestrates all steps
-        All paths are dynamically resolved from configuration
+        Background task entry point. Serializes renders so concurrent requests
+        never race on the shared working directories — one render at a time.
+        """
+        if _render_lock.locked():
+            logger.info("A render is already in progress; queuing this one...")
+        with _render_lock:
+            self._run_pipeline(request, video_filename)
+
+    def _run_pipeline(self, request: VideoGenerationRequest, video_filename: str):
+        """
+        The main pipeline that orchestrates all steps.
+        All paths are dynamically resolved from configuration.
         """
         try:
             logger.info(f"Starting video generation for: {request.topic}")

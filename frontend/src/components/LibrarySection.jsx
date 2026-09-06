@@ -8,6 +8,7 @@ export function LibrarySection({
     isGenerating,
     isPolling,
     newFilename,
+    onRequestDelete,
 }) {
     const query = searchQuery.trim().toLowerCase();
     const filtered = query
@@ -51,14 +52,12 @@ export function LibrarySection({
                     </p>
                 </div>
             ) : (
-                <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                <div className="flex flex-wrap justify-center gap-6 sm:justify-start">
                     {showAwaiting && (
-                        <article className="glass flex min-h-[18rem] flex-col items-center justify-center gap-3 p-6 text-center">
+                        <article className="glass flex h-[5cm] w-[3cm] flex-col items-center justify-center gap-2 p-3 text-center">
                             <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-accent" />
-                            <p className="display text-xl font-semibold text-txt">Rendering</p>
-                            <p className="text-xs text-muted">
-                                Your video will appear here when ready
-                            </p>
+                            <p className="display text-sm font-semibold text-txt">Rendering</p>
+                            <p className="text-[0.6rem] text-muted">Appears here when ready</p>
                         </article>
                     )}
                     {filtered.map((video, index) => (
@@ -67,6 +66,7 @@ export function LibrarySection({
                             index={index}
                             video={video}
                             isNew={video.name === newFilename}
+                            onRequestDelete={onRequestDelete}
                         />
                     ))}
                 </div>

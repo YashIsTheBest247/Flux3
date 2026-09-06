@@ -135,17 +135,6 @@ export function PipelineSection({ mode, activeStepKey, statusText }) {
                         style={{ left: `${edge}%`, width: `${Math.max(0, dotLeft - edge)}%` }}
                     />
 
-                    {/* flowing dot */}
-                    <div
-                        className="absolute top-7 z-10 -translate-x-1/2 -translate-y-1/2 transition-all duration-700 ease-out"
-                        style={{ left: `${dotLeft}%` }}
-                    >
-                        {isRunning && (
-                            <span className="absolute -inset-2 animate-ping rounded-full bg-accent/40" />
-                        )}
-                        <span className="block h-3.5 w-3.5 rounded-full bg-accent shadow-glow" />
-                    </div>
-
                     {/* stages */}
                     <ol
                         className="relative grid"
@@ -160,22 +149,31 @@ export function PipelineSection({ mode, activeStepKey, statusText }) {
 
                             return (
                                 <li key={step.key} className="flex flex-col items-center gap-3 px-1">
-                                    <span
-                                        className={`grid h-14 w-14 place-items-center rounded-full border bg-panel transition-all duration-300 ${
-                                            active
-                                                ? 'border-accent text-accent shadow-glow'
-                                                : done
-                                                  ? 'border-accent/50 text-accent'
-                                                  : 'border-tint/12 text-muted'
-                                        }`}
-                                    >
-                                        <Icon
-                                            className={`h-5 w-5 ${
-                                                isWheel
-                                                    ? `animate-spin ${active ? '[animation-duration:1.5s]' : '[animation-duration:7s]'}`
-                                                    : ''
+                                    <span className="relative grid h-14 w-14 place-items-center">
+                                        {/* spinning dashed ring on the active stage */}
+                                        {active && (
+                                            <>
+                                                <span className="absolute inset-0 animate-spin rounded-full border-[2.5px] border-dashed border-accent [animation-duration:3s]" />
+                                                <span className="absolute -inset-1.5 animate-ping rounded-full border border-accent/30" />
+                                            </>
+                                        )}
+                                        <span
+                                            className={`grid h-12 w-12 place-items-center rounded-full border bg-panel transition-all duration-300 ${
+                                                active
+                                                    ? 'border-accent/40 text-accent shadow-glow'
+                                                    : done
+                                                      ? 'border-accent/50 text-accent'
+                                                      : 'border-tint/12 text-muted'
                                             }`}
-                                        />
+                                        >
+                                            <Icon
+                                                className={`h-5 w-5 ${
+                                                    isWheel
+                                                        ? `animate-spin ${active ? '[animation-duration:1.5s]' : '[animation-duration:7s]'}`
+                                                        : ''
+                                                }`}
+                                            />
+                                        </span>
                                     </span>
                                     <span
                                         className={`text-xs font-medium ${

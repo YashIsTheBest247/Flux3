@@ -15,3 +15,9 @@ export async function listVideos() {
     }
     return response;
 }
+
+export async function deleteVideo(name) {
+    return requestJson(`${videosBaseUrl}/${encodeURIComponent(name)}`, {
+        method: 'DELETE',
+    });
+}
