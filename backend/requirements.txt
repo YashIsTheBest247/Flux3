@@ -29,6 +29,7 @@ werkzeug
 # Video Processing
 opencv-python-headless
 moviepy
+imageio-ffmpeg
 pysrt
 pillow
 
@@ -38,5 +39,8 @@ kokoro
 misaki
 
 # ML/AI
-torch --index-url https://download.pytorch.org/whl/cpu
+# CPU-only torch: the +cpu local version lives on the pytorch index and keeps the
+# build lean (default PyPI torch on Linux pulls the multi-GB CUDA wheel).
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.12.1+cpu
 transformers

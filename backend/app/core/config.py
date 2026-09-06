@@ -84,6 +84,9 @@ class Settings(BaseSettings):
     SECRETS_DIR: Optional[Path] = Field(default=None)
     YOUTUBE_CLIENT_SECRET_FILE: Optional[Path] = Field(default=None)
     YOUTUBE_TOKEN_FILE: Optional[Path] = Field(default=None)
+    # Deployment fallback: paste the contents of youtube_token.json here when the
+    # filesystem is ephemeral/read-only (e.g. Render). Takes priority over the file.
+    YOUTUBE_TOKEN_JSON: str = Field(default="", env="YOUTUBE_TOKEN_JSON")
 
     @property
     def youtube_tags_list(self) -> List[str]:

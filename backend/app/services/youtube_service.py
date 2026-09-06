@@ -29,26 +29,43 @@ class YouTubeServiceError(Exception):
 
 def _load_credentials() -> Credentials:
     """
-    Load credentials from the stored token file and refresh them if expired.
-    Re-saves the token file when the access token is refreshed.
+    Load credentials, preferring the YOUTUBE_TOKEN_JSON env var (for deployments
+    like Render where secrets/ is gitignored and the filesystem is ephemeral),
+    falling back to the secrets/youtube_token.json file for local dev.
+    Refreshes the access token when expired and persists it back when possible.
     """
+    import json
+
     token_file: Path = settings.YOUTUBE_TOKEN_FILE
+    token_json = (settings.YOUTUBE_TOKEN_JSON or "").strip()
 
-    if not token_file or not token_file.exists():
+    if token_json:
+        try:
+            creds = Credentials.from_authorized_user_info(json.loads(token_json), SCOPES)
+        except Exception as exc:  # noqa: BLE001
+            raise YouTubeServiceError(
+                f"YOUTUBE_TOKEN_JSON env var is not valid token JSON: {exc}"
+            ) from exc
+    elif token_file and token_file.exists():
+        creds = Credentials.from_authorized_user_file(str(token_file), SCOPES)
+    else:
         raise YouTubeServiceError(
-            f"YouTube token file not found at {token_file}. "
-            "Run the OAuth flow to create secrets/youtube_token.json."
+            f"No YouTube credentials found. Set YOUTUBE_TOKEN_JSON, or create "
+            f"{token_file} via the OAuth flow (python authorize_youtube.py)."
         )
-
-    creds = Credentials.from_authorized_user_file(str(token_file), SCOPES)
 
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             logger.info("YouTube access token expired; refreshing via refresh_token...")
             creds.refresh(Request())
-            # Persist the refreshed token so we don't refresh on every call.
-            token_file.write_text(creds.to_json(), encoding="utf-8")
-            logger.info("Refreshed YouTube token saved.")
+            # Best-effort persist of the refreshed token (no-op on read-only/ephemeral FS).
+            try:
+                if token_file:
+                    token_file.parent.mkdir(parents=True, exist_ok=True)
+                    token_file.write_text(creds.to_json(), encoding="utf-8")
+                    logger.info("Refreshed YouTube token saved to file.")
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"Could not persist refreshed token (continuing): {exc}")
         else:
             raise YouTubeServiceError(
                 "Stored YouTube credentials are invalid and cannot be refreshed "
