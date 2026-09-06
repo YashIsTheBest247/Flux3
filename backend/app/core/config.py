@@ -77,7 +77,10 @@ class Settings(BaseSettings):
     TTS_LANG_CODE: str = Field(default="b", env="TTS_LANG_CODE")
 
     # YouTube auto-publishing
-    # Privacy is forced to "private" for now (see YOUTUBE_PRIVACY_STATUS).
+    # When true, EVERY generated video is published (not just ones where the UI
+    # toggle/publish_to_youtube flag is set). The UI toggle can still enable
+    # publishing per-render even when this is false.
+    YOUTUBE_AUTO_UPLOAD: bool = Field(default=False, env="YOUTUBE_AUTO_UPLOAD")
     YOUTUBE_PRIVACY_STATUS: str = Field(default="private", env="YOUTUBE_PRIVACY_STATUS")
     YOUTUBE_CATEGORY_ID: str = Field(default="27", env="YOUTUBE_CATEGORY_ID")  # 27 = Education
     YOUTUBE_DEFAULT_TAGS: str = Field(default="education,flux,ai", env="YOUTUBE_DEFAULT_TAGS")

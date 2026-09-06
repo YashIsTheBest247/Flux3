@@ -363,9 +363,31 @@ def create_video(
     else:
         final_video = video
     
-    # Write video file
-    final_video.write_videofile(str(output_file), fps=fps, threads=os.cpu_count())
-    print(f"Video created successfully: {output_file}")
+    # Write video file.
+    # Keep threads low and use the fastest encode preset to bound peak memory/CPU
+    # on small instances (e.g. Render free tier). FLUX_FFMPEG_THREADS overrides.
+    ffmpeg_threads = int(os.environ.get("FLUX_FFMPEG_THREADS", "2"))
+    ffmpeg_preset = os.environ.get("FLUX_FFMPEG_PRESET", "ultrafast")
+    try:
+        final_video.write_videofile(
+            str(output_file),
+            fps=fps,
+            threads=ffmpeg_threads,
+            preset=ffmpeg_preset,
+            logger=None,
+        )
+        print(f"Video created successfully: {output_file}")
+    finally:
+        # Release decoders/encoders and audio handles to free memory promptly.
+        for clip in raw_clips:
+            try:
+                clip.close()
+            except Exception:
+                pass
+        try:
+            final_video.close()
+        except Exception:
+            pass
     return True
 
 

@@ -14,9 +14,11 @@ from fastapi import BackgroundTasks
 from app.schemas.video import VideoGenerationRequest, VideoGenerationResponse
 from app.core.config import settings
 from imagegen.generate_script import VideoScriptGenerator
-from imagegen.gen_img import main_generate_images
-from tts.generate_audio_refactored import main_generate_audio
-from assembly.scripts.assembly_video_refactored import create_video, create_complete_srt
+# NOTE: the image/TTS/assembly pipeline (which pulls in torch, kokoro, moviepy,
+# opencv) is imported lazily inside _generate_video_task — NOT at module import.
+# This keeps the web process light at boot so the API/health/trends endpoints
+# survive on small (e.g. 512 MB free-tier) instances; the heavy deps are only
+# loaded when an actual render runs in the background.
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +95,22 @@ class VideoGenerationService:
         """
         try:
             logger.info(f"Starting video generation for: {request.topic}")
-            
+
+            # Lazy imports: load the heavy pipeline only when actually rendering.
+            from imagegen.gen_img import main_generate_images
+            from tts.generate_audio_refactored import main_generate_audio
+            from assembly.scripts.assembly_video_refactored import (
+                create_video,
+                create_complete_srt,
+            )
+
+            # Cap CPU threads to keep peak memory down on small instances.
+            try:
+                import torch
+                torch.set_num_threads(1)
+            except Exception:  # noqa: BLE001 - torch optional / best-effort
+                pass
+
             # Step 1: Clean working directories
             logger.info("Cleaning working directories...")
             self._clean_directory(settings.IMAGES_DIR)
@@ -168,8 +185,9 @@ class VideoGenerationService:
 
             logger.info(f"Video generation complete: {video_filename}")
 
-            # Step 8: Auto-publish to YouTube (only when the user enabled it)
-            if request.publish_to_youtube:
+            # Step 8: Auto-publish to YouTube when the per-render flag is set OR
+            # the global YOUTUBE_AUTO_UPLOAD setting is enabled.
+            if request.publish_to_youtube or settings.YOUTUBE_AUTO_UPLOAD:
                 self._publish_to_youtube(request, final_video_path)
 
         except Exception as e:
