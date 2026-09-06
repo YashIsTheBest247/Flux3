@@ -38,6 +38,11 @@ frontend/dist-ssr/
 .env.local
 .env.*.local
 
+# Secrets (YouTube OAuth client secret + token) - NEVER commit
+backend/secrets/
+*_client_secret.json
+*_token.json
+
 # Logs
 *.log
 app_debug.log

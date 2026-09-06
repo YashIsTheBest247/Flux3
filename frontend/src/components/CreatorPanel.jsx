@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { durationOptions, formatOptions, visibilityOptions } from '../data/options.js';
+import { durationOptions, formatOptions } from '../data/options.js';
 
 const initialForm = {
     format: 'video',
     topic: '',
     duration: 60,
     keyPoints: '',
-    visibility: 'unlisted',
+    autoPublish: false,
 };
 
 export function CreatorPanel({ onGenerate, isGenerating }) {
@@ -42,7 +42,7 @@ export function CreatorPanel({ onGenerate, isGenerating }) {
                         Create a video
                     </h2>
                 </div>
-                <span className="chip">Auto-publishes · ~5–10 min</span>
+                <span className="chip">~5–10 min · publish optional</span>
             </div>
 
             <form onSubmit={handleSubmit} className="grid gap-5 lg:grid-cols-12">
@@ -118,26 +118,40 @@ export function CreatorPanel({ onGenerate, isGenerating }) {
 
                 {/* Publish */}
                 <div className="glass-strong flex flex-col gap-8 p-6 lg:col-span-4 lg:p-8">
-                    <Field label="Visibility on YouTube">
-                        <div className="flex flex-col gap-2">
-                            {visibilityOptions.map((option) => {
-                                const active = form.visibility === option.value;
-                                return (
-                                    <button
-                                        key={option.value}
-                                        type="button"
-                                        onClick={() => update('visibility', option.value)}
-                                        className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-medium transition-all ${
-                                            active
-                                                ? 'border-accent/40 bg-accent/10 text-txt'
-                                                : 'border-tint/10 bg-tint/[0.03] text-muted hover:text-txt'
-                                        }`}
-                                    >
-                                        {option.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                    <Field label="Auto-publish to YouTube">
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={form.autoPublish}
+                            onClick={() => update('autoPublish', !form.autoPublish)}
+                            className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-left transition-all ${
+                                form.autoPublish
+                                    ? 'border-accent/40 bg-accent/10'
+                                    : 'border-tint/10 bg-tint/[0.03] hover:border-tint/20'
+                            }`}
+                        >
+                            <span className="flex flex-col">
+                                <span className="text-sm font-semibold text-txt">
+                                    {form.autoPublish ? 'Enabled' : 'Disabled'}
+                                </span>
+                                <span className="text-xs text-muted">
+                                    {form.autoPublish
+                                        ? 'Uploads as Private when the render finishes'
+                                        : 'Render stays in your library only'}
+                                </span>
+                            </span>
+                            <span
+                                className={`relative h-6 w-11 shrink-0 rounded-full transition-colors ${
+                                    form.autoPublish ? 'bg-accent' : 'bg-tint/20'
+                                }`}
+                            >
+                                <span
+                                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${
+                                        form.autoPublish ? 'translate-x-[22px]' : 'translate-x-0.5'
+                                    }`}
+                                />
+                            </span>
+                        </button>
                     </Field>
 
                     <div className="mt-auto flex flex-col gap-3">
@@ -152,7 +166,6 @@ export function CreatorPanel({ onGenerate, isGenerating }) {
                             className="btn-light w-full py-4 text-base"
                         >
                             {isGenerating ? 'Generating…' : 'Generate video'}
-                            <span aria-hidden>↗</span>
                         </button>
                         <p className="text-center text-xs text-faint">One render at a time</p>
                     </div>

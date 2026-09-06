@@ -1,0 +1,46 @@
+# Render Blueprint for the Flux backend (FastAPI).
+# Deploy: Render Dashboard -> New -> Blueprint -> pick this repo.
+#
+# IMPORTANT: the video pipeline (torch + moviepy + kokoro/TTS) is RAM- and
+# CPU-heavy. The free/starter tiers will OOM during a render. Use at least the
+# "standard" plan (2 GB). Generated videos live on an attached disk so they
+# survive restarts; without it the Library empties on every deploy.
+services:
+  - type: web
+    name: flux-backend
+    runtime: python
+    rootDir: backend
+    plan: standard
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.4
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "False"
+      # Secrets — set these in the Render dashboard (sync:false = not stored in git)
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: PEXELS_API_KEY
+        sync: false
+      # Comma-separated allowed origins; include your Vercel URL, e.g.
+      # https://flux-frontend.vercel.app
+      - key: CORS_ORIGINS
+        sync: false
+      # Paste the full contents of secrets/youtube_token.json here to enable
+      # auto-publish (secrets/ is gitignored and Render's FS is ephemeral).
+      - key: YOUTUBE_TOKEN_JSON
+        sync: false
+      # Trending pipeline — off by default; flip to true to enable on the server.
+      - key: TRENDS_ENABLED
+        value: "false"
+      - key: TRENDS_AUTO_PUBLISH
+        value: "false"
+    disk:
+      name: flux-media
+      mountPath: /opt/render/project/src/backend/static
+      sizeGB: 5

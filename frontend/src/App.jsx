@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Header } from './components/Header.jsx';
 import { Hero } from './components/Hero.jsx';
 import { CreatorPanel } from './components/CreatorPanel.jsx';
-import { InsightsSection } from './components/InsightsSection.jsx';
 import { PipelineSection } from './components/PipelineSection.jsx';
 import { LibrarySection } from './components/LibrarySection.jsx';
 import { DevFooter } from './components/DevFooter.jsx';
@@ -149,10 +148,9 @@ export function App() {
             <main className="flex-1">
                 <Hero
                     onOpenApp={() => scrollToSection('creator')}
-                    onDiscover={() => scrollToSection('insights')}
+                    onDiscover={() => scrollToSection('pipeline')}
                 />
                 <CreatorPanel onGenerate={handleGenerate} isGenerating={isGenerating} />
-                <InsightsSection />
                 <PipelineSection
                     mode={pipeline.mode}
                     activeStepKey={pipeline.activeStepKey}

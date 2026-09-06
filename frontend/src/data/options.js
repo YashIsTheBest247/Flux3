@@ -1,7 +1,6 @@
 export const navLinks = [
     { id: 'top', label: 'Home' },
     { id: 'creator', label: 'Creator' },
-    { id: 'insights', label: 'Insights' },
     { id: 'pipeline', label: 'Pipeline' },
     { id: 'library', label: 'Library' },
 ];
@@ -43,23 +42,3 @@ export const heroNodes = [
 ];
 
 export const brandLogos = ['YouTube', 'KokoroTTS', 'Render', 'Vercel', 'Pexels', 'Gemini', 'Pillow'];
-
-// (Per-stage bar chart removed — the live Pipeline section is the single source of truth.)
-
-export const insightStats = [
-    {
-        value: '98.2%',
-        label: 'Render success',
-        sub: 'Scenes assembled without manual edits',
-    },
-    {
-        value: '6 min',
-        label: 'Average build',
-        sub: 'Topic in, finished MP4 out',
-    },
-    {
-        value: '5',
-        label: 'Pipeline stages',
-        sub: 'Script · Image · Voice · Subtitles · Assembly · Publish',
-    },
-];

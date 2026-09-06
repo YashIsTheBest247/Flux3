@@ -2,6 +2,18 @@ import { useState } from 'react';
 import { navLinks } from '../data/options.js';
 import { ThemeToggle } from './ThemeToggle.jsx';
 
+const channelUrl =
+    import.meta.env.VITE_FLUX_CHANNEL_URL?.trim() ||
+    'https://youtube.com/@echoesofmyindia?si=q-RwYc6p1VVCCtD_';
+
+function YouTubeIcon({ className }) {
+    return (
+        <svg viewBox="0 0 24 24" fill="currentColor" className={className}>
+            <path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.6 12 3.6 12 3.6s-7.5 0-9.4.5A3 3 0 0 0 .5 6.2 31.4 31.4 0 0 0 0 12a31.4 31.4 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1A31.4 31.4 0 0 0 24 12a31.4 31.4 0 0 0-.5-5.8zM9.6 15.6V8.4l6.2 3.6-6.2 3.6z" />
+        </svg>
+    );
+}
+
 function Logo() {
     return (
         <span className="grid h-9 w-9 place-items-center rounded-full border border-tint/15 bg-tint/[0.06] text-txt">
@@ -53,19 +65,17 @@ export function Header({ onNavigate }) {
 
                 <div className="hidden items-center gap-3 lg:flex">
                     <ThemeToggle />
-                    <button
-                        type="button"
-                        onClick={() => handleNav('creator')}
+                    <a
+                        href={channelUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
                         className="flex items-center gap-2.5 text-sm font-medium text-txt transition-opacity hover:opacity-80"
                     >
                         <span className="grid h-8 w-8 place-items-center rounded-full border border-tint/15 bg-tint/[0.06] text-txt">
-                            <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
-                                <circle cx="12" cy="8" r="3.6" />
-                                <path d="M4.5 20a7.5 7.5 0 0 1 15 0 1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1z" />
-                            </svg>
+                            <YouTubeIcon className="h-4 w-4" />
                         </span>
-                        Create Account
-                    </button>
+                        Flux Channel
+                    </a>
                 </div>
 
                 <div className="flex items-center gap-2 lg:hidden">
@@ -97,13 +107,15 @@ export function Header({ onNavigate }) {
                             {link.label}
                         </button>
                     ))}
-                    <button
-                        type="button"
-                        onClick={() => handleNav('creator')}
-                        className="btn-light mt-2 w-full"
+                    <a
+                        href={channelUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="btn-light mt-2 flex w-full items-center justify-center gap-2"
                     >
-                        Create Account
-                    </button>
+                        <YouTubeIcon className="h-4 w-4" />
+                        Flux Channel
+                    </a>
                 </div>
             )}
         </header>
