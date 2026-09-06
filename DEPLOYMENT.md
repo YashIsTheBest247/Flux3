@@ -83,6 +83,15 @@ peak memory is ~300 MB rather than ~1.5 GB. That reopens the small tiers:
    this repository. Render reads [render.yaml](render.yaml) and creates one
    Docker web service; [`.dockerignore`](.dockerignore) keeps old renders out of
    the build context (198 MB → 17 MB).
+
+   > **If Render asks for a card:** the Blueprint flow can require payment
+   > details on file even when every service in the file is on the free plan.
+   > There is no way to satisfy it from the YAML. Create the service by hand
+   > instead — **New → Web Service** → the same repo → Runtime **Docker**,
+   > Instance Type **Free** — then paste the environment variables from §2.3
+   > into the Environment tab. You lose only the convenience of the blueprint
+   > filling them in; the resulting service is identical, since every setting
+   > that matters is an env var.
 3. Render prompts for every `sync: false` variable in the blueprint. Fill in:
    ```
    GEMINI_API_KEY=...
@@ -107,17 +116,44 @@ Later deploys reuse the dependency layer unless `requirements.txt` changes.
 
 ### Which plan
 
+**The blueprint ships `plan: free`,** and the memory budget it sets is what
+makes that work:
+
+```yaml
+FLUX_VIDEO_WIDTH: 480      # kept — 720/1080 will not fit
+FLUX_VIDEO_HEIGHT: 854
+DEFAULT_VIDEO_FPS: 15      # from 20; near-invisible here, 25% fewer frames
+FLUX_FFMPEG_PRESET: ultrafast
+FLUX_FFMPEG_THREADS: 2
+TRENDS_TOP_N: 1            # two overlapping renders is the fastest OOM
+INGEST_MAX_MB: 250         # upload + frame + audio share one small disk
+```
+
+The frame rate is the cheapest lever and the resolution is the most expensive
+one to give up. These shorts are photographs held under narration with the
+occasional slow pan, so the difference between 20 and 15 fps is very hard to
+see — whereas dropping below 480x854 is the first thing a viewer notices on a
+phone.
+
+The reason free is viable at all is that narration moved to Edge TTS, so the
+image carries no torch and a stills-only render peaks near **300 MB** of the
+512 MB available. The app also reads its own cgroup limit and, below
+`SCENE_VIDEO_MIN_MEMORY_MB` (768), runs **zero** stock video clips — each one
+costs roughly 140 MB of decoder on top of the baseline.
+
+That last point is a real trade, so it is worth stating plainly: **on the free
+plan the opening scenes lose their motion** and use photographs instead. The
+alternative is an OOM-killed render, which produces nothing at all.
+
 | Plan | Sleeps? | Renders? |
 |---|---|---|
-| Free (512 MB) | after 15 min idle | ⚠️ OOMs mid-render unless tuned right down |
-| **Starter ($7/mo, 512 MB)** | never | ⚠️ same memory ceiling, but no cold starts |
-| Standard (2 GB) | never | ✓ comfortable |
+| **Free (512 MB)** | after 15 min idle — §3 handles it | ✓ stills only, no scene clips |
+| Starter ($7/mo, 512 MB) | never | ✓ same ceiling, no cold starts |
+| Standard (2 GB) | never | ✓ comfortable, clips enabled |
 
-The blueprint ships `plan: starter`. On the **free** plan the keep-alive in §3
-is what keeps the URL responsive, and you should also set
-`FLUX_VIDEO_WIDTH=480`, `FLUX_FFMPEG_THREADS=2` and `TRENDS_TOP_N=1` — a 512 MB
-host runs **zero** video scenes and falls back to photographs, which is the only
-way the render fits. Test a real render early rather than on demo day.
+If a render is killed, check the logs for an OOM around the `voice` or
+`assembly` stage before suspecting the pipeline — and run one real render early
+rather than discovering it on demo day.
 
 ---
 

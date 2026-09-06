@@ -4,14 +4,23 @@
 # get a single URL for both UI and API. Durability comes from Backblaze B2, so
 # no persistent disk is needed even though Render's filesystem is ephemeral.
 #
-# The free plan (512 MB RAM) OOMs mid-render — use `starter` or larger.
+# Runs on the FREE plan (512 MB). That works because narration is Edge TTS, so
+# the image carries no torch and a stills-only render peaks near 300 MB. The
+# app reads its own cgroup limit and, below SCENE_VIDEO_MIN_MEMORY_MB (768),
+# runs ZERO stock video clips and uses photographs instead — each clip would
+# cost ~140 MB of decoder on top of the baseline. The trade is that the opening
+# scenes lose their motion; the alternative is an OOM-killed render, which
+# produces nothing at all.
+#
+# If renders do get killed, the fix in order: keep FLUX_VIDEO_WIDTH at 480,
+# keep TRENDS_TOP_N at 1, then move to `starter`.
 services:
   - type: web
     name: flux
     runtime: docker
     dockerfilePath: ./Dockerfile
     dockerContext: .
-    plan: starter
+    plan: free
     healthCheckPath: /ping
     autoDeploy: true
     envVars:
@@ -52,12 +61,26 @@ services:
       # --- Optional integrations --------------------------------------
       - key: PEXELS_API_KEY
         sync: false
+      # Second photo library, searched alongside Pexels. Was missing from this
+      # blueprint even though the app reads it, so Render never prompted for it
+      # and scenes silently fell back to a single source.
+      - key: UNSPLASH_ACCESS_KEY
+        sync: false
+      # Extra Gemini keys, comma separated, rotated when one hits its daily cap.
+      - key: GEMINI_API_KEYS
+        sync: false
       # Only needed for a split frontend deploy; the bundled UI is same-origin.
       - key: CORS_ORIGINS
         sync: false
       # Paste the contents of secrets/youtube_token.json to enable publishing.
       - key: YOUTUBE_TOKEN_JSON
         sync: false
+      # Names that channel on the Publishing card, so a visitor deciding whether
+      # to opt out reads "Publishes to <name>" rather than "the default channel".
+      - key: YOUTUBE_DEFAULT_CHANNEL_TITLE
+        sync: false
+      - key: YOUTUBE_PRIVACY_STATUS
+        value: private
 
       # --- Trending scheduler -----------------------------------------
       # On: the whole point of the deploy is that it renders unattended.
@@ -82,8 +105,12 @@ services:
       # Upload ceiling for bring-your-own-video. Render's disk is small and
       # ephemeral, and the upload plus its extracted frame and audio all live
       # there at once.
+      # Trimmed from 400 for the free plan's small ephemeral disk, which holds
+      # the upload, its extracted frame and its audio at the same time. Not cut
+      # to the bone: ingest never re-encodes, so this is a disk limit rather
+      # than a memory one.
       - key: INGEST_MAX_MB
-        value: "400"
+        value: "250"
 
       # --- Keep-alive ---------------------------------------------------
       # Render idles a web service out after ~15 minutes of no inbound
@@ -98,6 +125,30 @@ services:
       - key: KEEPALIVE_MINUTES
         value: "12"
 
-      # Small instances: cap ffmpeg threads to keep peak memory down.
+      # --- Free-plan memory budget --------------------------------------
+      # Explicit rather than relying on defaults, because these are the three
+      # settings that decide whether a render finishes on 512 MB.
       - key: FLUX_FFMPEG_THREADS
         value: "2"
+      # Already the fastest preset. Named explicitly because it is a memory
+      # decision, not just a speed one: slower presets hold far more reference
+      # frames in flight.
+      - key: FLUX_FFMPEG_PRESET
+        value: ultrafast
+      # 480x854 is kept. It is already modest, it is what a phone shows, and
+      # dropping below it is the first thing a viewer would actually notice.
+      - key: FLUX_VIDEO_WIDTH
+        value: "480"
+      - key: FLUX_VIDEO_HEIGHT
+        value: "854"
+      # 20 -> 15. These shorts are photographs held under narration with an
+      # occasional pan, so the frame-to-frame difference is tiny and 15 is
+      # visually near-identical - while writing 25% fewer frames, which is a
+      # real cut in both encode time and peak buffers. This is the cheapest
+      # quality/robustness trade available; lowering the resolution is not.
+      - key: DEFAULT_VIDEO_FPS
+        value: "15"
+      # One video per scheduled slot. Three slots a day is plenty, and two
+      # renders overlapping on this instance is the fastest way to an OOM.
+      - key: TRENDS_TOP_N
+        value: "1"
