@@ -1,5 +1,5 @@
 // Convert the creator form state into the backend VideoGenerationRequest shape.
-export function buildVideoPayload({ topic, duration, keyPoints, autoPublish, privacy }) {
+export function buildVideoPayload({ topic, duration, keyPoints, autoPublish, privacy, visualStyle }) {
     const points = (keyPoints || '')
         .split(/\r?\n|,/)
         .map((line) => line.trim())
@@ -10,6 +10,9 @@ export function buildVideoPayload({ topic, duration, keyPoints, autoPublish, pri
         duration: Number(duration) || 60,
         key_points: points,
         style: 'educational',
+        // null means "follow the active profile", which is what the automation
+        // does — only an explicit pick from the form overrides it.
+        visual_style: visualStyle === 'animated' || visualStyle === 'stock' ? visualStyle : null,
         publish_to_youtube: Boolean(autoPublish),
         // Pass the choice through. This used to collapse everything that was
         // not 'public' to 'unlisted', so picking Private silently published an

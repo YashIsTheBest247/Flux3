@@ -12,6 +12,13 @@ from google.genai import types
 # per-minute rate limit — it is the daily one, and no amount of backoff clears it.
 # Only a different project's key does. These markers identify that case so it can
 # be told apart from a transient 429 that retrying will fix.
+# A 404 here means "this key's project may not call this model", which no
+# amount of retrying or key rotation fixes - only a different model does.
+_MODEL_UNAVAILABLE_MARKERS = (
+    "NOT_FOUND", "404", "no longer available", "is not found",
+    "not supported for generateContent",
+)
+
 _PER_DAY_QUOTA_MARKERS = (
     "PerDay",
     "per day",
@@ -41,6 +48,9 @@ class GeminiKeyPool:
 
     def __bool__(self) -> bool:
         return bool(self.keys)
+
+    def __len__(self) -> int:
+        return len(self.keys)
 
     def current(self) -> Optional[str]:
         """The key to use now, or None when every key is spent."""
@@ -222,12 +232,32 @@ class VideoScriptGenerator:
             return self._generate_ollama(prompt, system_prompt)
 
         if self.client is None:
+            # Distinguish "you never configured a key" from "every key you
+            # configured is out of quota". Both used to report the former, so a
+            # deployment with four working keys that had simply spent its daily
+            # allowance told the operator to go and set a key they had already
+            # set - and the real fix (wait for reset, or add another project)
+            # was nowhere in the message.
+            total = len(self.key_rotator) if self.key_rotator else 0
+            if total:
+                raise RuntimeError(
+                    f"All {total} Gemini key(s) are unusable right now - most "
+                    "likely the free tier's daily quota is exhausted on every "
+                    "one. It resets at midnight Pacific. Add another key to "
+                    "GEMINI_API_KEYS, or set SCRIPT_PROVIDER=ollama to generate "
+                    "scripts locally."
+                )
             raise RuntimeError(
                 "No script model configured. Set GEMINI_API_KEY, or set "
                 "SCRIPT_PROVIDER=ollama to generate scripts locally."
             )
 
         transient_markers = ("503", "429", "500", "UNAVAILABLE", "overloaded", "high demand", "RESOURCE_EXHAUSTED")
+        # A model being LISTED by a key does not mean that key may call it:
+        # projects created after a model's cutoff see it in models.list() and
+        # then get 404 "no longer available to new users" on generateContent.
+        # So the pinned model is only the first candidate.
+        model_candidates = self._model_candidates()
         last_error = None
         # Counted by hand rather than with `for attempt in range(...)`: rotating to
         # a fresh key is not a retry of a failed attempt, it is the first attempt on
@@ -270,6 +300,18 @@ class VideoScriptGenerator:
                     print(f"{self.model} rejects thinking_budget=0; retrying with thinking enabled.")
                     continue
 
+                # This key cannot use this model. Fall to the next candidate.
+                # Not a retry of a failed request - it is the first attempt on a
+                # different model - so it does not spend one of the budgeted
+                # retries either.
+                if any(m in msg for m in _MODEL_UNAVAILABLE_MARKERS):
+                    nxt = next((m for m in model_candidates if m != self.model), None)
+                    if nxt:
+                        model_candidates = [m for m in model_candidates if m != self.model]
+                        print(f"{self.model} is not available on this key; trying {nxt}.")
+                        self.model = nxt
+                        continue
+
                 # Daily quota gone on this key. Backoff cannot help — only another
                 # project's key can — so rotate before the transient check, which
                 # would otherwise sleep through a 429 that never clears.
@@ -305,6 +347,29 @@ class VideoScriptGenerator:
                 raise RuntimeError(f"Gemini API call failed: {msg}")
         raise RuntimeError(f"Gemini API call failed after {max_retries} attempts: {last_error}")
 
+    def _model_candidates(self) -> List[str]:
+        """The pinned model first, then progressively safer fallbacks.
+
+        `gemini-flash-latest` is second on purpose: it is an alias that always
+        resolves to a current Flash model, so it keeps working on new projects
+        after a pinned version stops being offered to them. The rest descend
+        toward smaller models that are almost always available.
+        """
+        chain = [
+            self.model,
+            "gemini-flash-latest",
+            "gemini-3.5-flash",
+            "gemini-2.5-flash",
+            "gemini-flash-lite-latest",
+            "gemini-2.5-flash-lite",
+        ]
+        seen, ordered = set(), []
+        for name in chain:
+            if name and name not in seen:
+                seen.add(name)
+                ordered.append(name)
+        return ordered
+
     def _extract_json(self, raw_text: str) -> Dict:
         """
         Extract JSON from raw text output.
@@ -329,6 +394,7 @@ class VideoScriptGenerator:
         words_per_second: float = 2.5,
         use_web_context: bool = False,
         directives: Optional[str] = None,
+        animated: bool = False,
     ) -> Dict:
         """
         Generate a video script based on the given topic, duration, and key points.
@@ -371,6 +437,20 @@ class VideoScriptGenerator:
 
         # SINGLE Gemini call (draft + segmentation combined) to halve free-tier
         # quota usage. Produces the final timestamped audio + visual script directly.
+        # In animated mode nothing is searched for - every scene is drawn - so
+        # the prompt stops asking for "photographable" subjects and starts
+        # asking for a SCENE with a character doing something, which is what a
+        # generative image model is actually good at.
+        animation_note = (
+            "ANIMATION MODE: these prompts are handed to an image GENERATOR, not "
+            "a stock search. Describe a scene worth drawing - a character, an "
+            "action, a setting, a camera angle - rather than a findable object. "
+            "Do not ask for photographs, logos, or real people's likenesses."
+            if animated else
+            "These prompts are handed to a stock PHOTO SEARCH, so the subject "
+            "must be something a photographer has actually shot."
+        )
+
         prompt = f"""Create a complete, ready-to-produce short video script about: {topic}.
 
         {directives}
@@ -395,6 +475,7 @@ class VideoScriptGenerator:
           physical stand-in: a trading floor screen, a newspaper front page, a bank counter.
         - When the story names a real company, product, institution, place or person,
           put it in the prompt. A named subject is findable; a generic one is not.
+        {animation_note}
         - Prefer the PREFERRED VISUAL SUBJECTS above when one fits the segment - they
           are the vocabulary this channel's audience expects to see.
         - Vary the subjects across segments. Do not repeat the same subject twice.

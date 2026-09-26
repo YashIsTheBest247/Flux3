@@ -597,6 +597,7 @@ def main_generate_images(
     image_provider: str = "auto",
     genblaze_generator: Optional[Callable[[List[str], List[Path], str], Sequence[Optional[Path]]]] = None,
     source_log: Optional[dict] = None,
+    style_prefix: str = "",
 ) -> bool:
     """
     Process the script JSON and source one image per scene.
@@ -612,7 +613,8 @@ def main_generate_images(
             answered properly by the other.
         gemini_model: Gemini image model used on fallback
         aspect_ratio: Desired image aspect ratio
-        image_provider: "auto" (stock -> gemini, the default flow), "genblaze"
+        image_provider: "auto" (stock -> gemini, the default flow), "animated"
+            (generated art -> stock fallback), "genblaze"
             (genblaze -> stock -> gemini), or a pinned source ("pexels",
             "unsplash", "gemini")
         genblaze_generator: callable(prompts, out_paths, aspect_ratio) returning
@@ -737,10 +739,38 @@ def main_generate_images(
                         with used_lock:
                             used_photo_ids.add(photo_id)
 
-            if not image_bytes and provider in ("auto", "genblaze", "gemini"):
-                image_bytes = generate_gemini_image(prompt, gemini_api_key, gemini_model)
+            if not image_bytes and provider in ("auto", "genblaze", "gemini", "animated"):
+                # The style prefix is applied ONLY on the generated path. A
+                # stock search given "3D animated movie still, Pixar style"
+                # returns photographs of cinema seats, so it must never reach
+                # Pexels or Unsplash.
+                styled = f"{style_prefix}. {prompt}" if style_prefix else prompt
+                image_bytes = generate_gemini_image(styled, gemini_api_key, gemini_model)
                 if image_bytes:
                     used = "gemini"
+
+            # Animated asked for generated art and did not get it - almost
+            # always because image generation is not on the caller's Gemini
+            # tier at all (`limit: 0`, which no amount of retrying or key
+            # rotation fixes). Fall back to stock rather than shipping a black
+            # "No Image Available" card: a photograph in an animated video is a
+            # style inconsistency, an empty frame is a broken video.
+            if not image_bytes and provider == "animated":
+                print("  generated art unavailable; falling back to stock for this scene")
+                with used_lock:
+                    snapshot = set(used_photo_ids)
+                image_bytes, photo_id = search_stock_image(
+                    prompt,
+                    pexels_api_key=pexels_api_key,
+                    unsplash_api_key=unsplash_api_key,
+                    aspect_ratio=aspect_ratio,
+                    exclude_ids=snapshot,
+                )
+                if image_bytes:
+                    used = photo_id.split(":", 1)[0] if photo_id else "stock"
+                    if photo_id is not None:
+                        with used_lock:
+                            used_photo_ids.add(photo_id)
 
             if not image_bytes:
                 print(f"No image obtained for prompt: {prompt}")

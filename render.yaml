@@ -1,5 +1,10 @@
 
-# Render blueprint — one service, one public URL.
+# Render blueprint — the Flux API.
+#
+# SPLIT DEPLOY: the frontend is hosted separately (Vercel et al) and talks to
+# this service cross-origin, so CORS_ORIGINS below is REQUIRED, not optional.
+# The image still bundles the SPA and serves it from `/`, which costs a minute
+# of build time and buys a same-origin fallback if the frontend host is down.
 # The Docker image builds the React SPA and serves it from FastAPI, so judges
 # get a single URL for both UI and API. Durability comes from Backblaze B2, so
 # no persistent disk is needed even though Render's filesystem is ephemeral.
@@ -42,6 +47,10 @@ services:
         sync: false
       - key: B2_REGION
         sync: false
+      # Everything durable lives under this prefix: the library, the credential
+      # vault, the custom profiles, the active-profile choice and the
+      # scheduler's processed-story state. Two deployments sharing a prefix
+      # share ALL of that - change it to isolate an environment.
       - key: B2_PREFIX
         value: flux
       - key: KEEP_LOCAL_COPY
@@ -69,7 +78,13 @@ services:
       # Extra Gemini keys, comma separated, rotated when one hits its daily cap.
       - key: GEMINI_API_KEYS
         sync: false
-      # Only needed for a split frontend deploy; the bundled UI is same-origin.
+      # REQUIRED in this split deploy. Set it to the frontend's exact origin,
+      # comma separated for several, and with NO trailing slash - browsers send
+      # the Origin header without one, so a trailing slash silently fails every
+      # preflight. The app strips them defensively, but do not rely on that.
+      #   e.g. https://flux.vercel.app,https://www.yourdomain.com
+      # Leave it unset and every API call from the frontend is blocked by the
+      # browser, which surfaces as "failed to fetch" with a green /health.
       - key: CORS_ORIGINS
         sync: false
       # Paste the contents of secrets/youtube_token.json to enable publishing.
@@ -79,10 +94,24 @@ services:
       # to opt out reads "Publishes to <name>" rather than "the default channel".
       - key: YOUTUBE_DEFAULT_CHANNEL_TITLE
         sync: false
+      # Public link behind the channel badge in the header. Added after this
+      # blueprint was last touched, so a Render deploy was rendering the badge
+      # as plain text while Railway linked it.
+      - key: YOUTUBE_CHANNEL_URL
+        sync: false
       - key: YOUTUBE_PRIVACY_STATUS
         value: private
 
       # --- Trending scheduler -----------------------------------------
+      # DANGER: exactly ONE deployment may have this on at a time.
+      #
+      # This service is the publisher. Every deployment pointed at the same B2
+      # bucket shares the processed-story state, the credential vault and the
+      # active profile, so a second instance with this on publishes to the SAME
+      # YouTube channel and can race on the same story before either marks it
+      # done. Turn Railway's scheduler off (or delete the service) as part of
+      # this cutover - see DEPLOYMENT.md.
+      #
       # On: the whole point of the deploy is that it renders unattended.
       - key: TRENDS_ENABLED
         value: "true"
@@ -96,8 +125,12 @@ services:
       # written to B2. generateValue gives each deployment its own; it is
       # stable for the life of the service, and changing it makes the stored
       # credentials unreadable (the app says so rather than failing silently).
+      # NOT generateValue. This service reuses an existing B2 bucket whose
+      # credential vault was encrypted with the key the previous deployment
+      # used; a freshly generated one cannot decrypt it, and the app would
+      # report the stored credentials as unreadable. Paste the SAME value.
       - key: FLUX_SECRET_KEY
-        generateValue: true
+        sync: false
       # Which channel type the pipeline starts as. Changed in the dashboard
       # afterwards; the choice is stored in B2, so this is only the first boot.
       - key: CONTENT_PROFILE

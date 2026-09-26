@@ -11,6 +11,14 @@ class VideoGenerationRequest(BaseModel):
     duration: int = Field(default=60, description="Duration in seconds", ge=10, le=300)
     key_points: List[str] = Field(default=[], description="Key points to cover in the video")
     style: str = Field(default="educational", description="Video style")
+    visual_style: Optional[Literal["stock", "animated"]] = Field(
+        default=None,
+        description=(
+            "How the scenes should look. 'stock' uses photographs; 'animated' "
+            "generates every scene as illustration/3D-render art. None follows "
+            "the active content profile, then VISUAL_STYLE."
+        ),
+    )
     publish_to_youtube: bool = Field(
         default=False,
         description="When true, the finished video is auto-published to YouTube."

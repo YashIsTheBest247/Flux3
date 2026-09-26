@@ -14,7 +14,7 @@
 #     60 days. It will email first.
 #
 # Setup: Settings -> Secrets and variables -> Actions -> New repository secret
-#   APP_URL = https://<your-app>.up.railway.app   (no trailing slash)
+#   APP_URL = https://<your-service>.onrender.com   (no trailing slash)
 # RENDER_URL is still honoured so an existing setup keeps working.
 name: keepalive
 

@@ -181,6 +181,56 @@ def fit_to_frame(clip, target_w: int = TARGET_W, target_h: int = TARGET_H):
     return clip.cropped(x1=x1, y1=y1, width=target_w, height=target_h)
 
 
+def ken_burns(clip, zoom: float = 1.12, target_w: int = TARGET_W, target_h: int = TARGET_H):
+    """A slow push-in across the clip's duration.
+
+    This is the difference between a slideshow and something that reads as
+    animation. A generated frame held perfectly still for eight seconds
+    announces itself as a static image no matter how good the art is; the same
+    frame drifting slowly toward the viewer reads as a shot.
+
+    Implemented by over-scaling once and animating the CROP WINDOW rather than
+    resizing every frame: resizing per frame is the expensive path and, on a
+    small instance, the one that gets a render OOM-killed.
+
+    Direction alternates by clip identity so consecutive scenes do not all push
+    the same way, which is the thing that makes cheap Ken Burns look cheap.
+    """
+    duration = getattr(clip, "duration", None)
+    if not duration or duration <= 0 or zoom <= 1.0:
+        return clip
+
+    # Scale up once to the widest point the pan will ever need.
+    big_w, big_h = round(target_w * zoom), round(target_h * zoom)
+    base = clip.resized((big_w, big_h))
+
+    max_dx, max_dy = big_w - target_w, big_h - target_h
+    # Alternate push-in / pull-out so a run of scenes has some variety.
+    outward = (id(clip) // 16) % 2 == 1
+
+    def crop_at(t):
+        progress = min(1.0, max(0.0, t / duration))
+        if outward:
+            progress = 1.0 - progress
+        # Ease in-out: constant-velocity motion reads as a machine panning.
+        eased = progress * progress * (3 - 2 * progress)
+        x = round(max_dx * (0.5 + (eased - 0.5) * 0.9))
+        y = round(max_dy * (0.5 + (eased - 0.5) * 0.9))
+        return max(0, min(max_dx, x)), max(0, min(max_dy, y))
+
+    def make_frame(t):
+        frame = base.get_frame(t)
+        x, y = crop_at(t)
+        return frame[y:y + target_h, x:x + target_w]
+
+    from moviepy import VideoClip
+
+    moving = VideoClip(make_frame, duration=duration)
+    if getattr(clip, "audio", None) is not None:
+        moving = moving.with_audio(clip.audio)
+    return moving
+
+
 def check_file_exists(file_path: Path) -> bool:
     """Check if a file exists at the specified path."""
     if file_path.is_file():
@@ -524,7 +574,18 @@ def create_video(
         audio_clip = AudioFileClip(str(audio))
         scene_clip = build_scene_clip(scene_video, scene_image, audio_clip.duration, fps)
         # Fit each scene to the vertical 9:16 frame (cover + center-crop)
-        scene_clip = fit_to_frame(scene_clip).with_audio(audio_clip)
+        scene_clip = fit_to_frame(scene_clip)
+        # Then give the still ones motion. A scene backed by a stock VIDEO clip
+        # already moves; pushing in on top of that fights the footage, so the
+        # drift is only applied where there is nothing else happening.
+        if os.environ.get("FLUX_KEN_BURNS", "true").lower() == "true" and not scene_video:
+            try:
+                zoom = float(os.environ.get("FLUX_KEN_BURNS_ZOOM", "1.12"))
+                scene_clip = ken_burns(scene_clip, zoom=zoom)
+            except Exception as exc:  # noqa: BLE001
+                # Motion is a nicety; a still scene beats a failed render.
+                print(f"  ken burns skipped: {exc}")
+        scene_clip = scene_clip.with_audio(audio_clip)
         audio_durations.append(audio_clip.duration)
         print(f"Video Clip no. {len(raw_clips)} successfully created")
         scene_clip = add_effects(scene_clip)

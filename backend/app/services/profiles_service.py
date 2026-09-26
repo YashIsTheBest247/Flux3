@@ -61,6 +61,10 @@ DEFAULTS: Dict[str, Any] = {
         "style": "clean editorial photography",
         "subjects": [],
         "prefer_clips": True,
+        # "stock" photographs, or "animated" generated art. A profile can make
+        # this its identity - an explainer channel that is always illustrated
+        # reads as a brand rather than as a stock-photo feed.
+        "mode": "stock",
     },
     "format": {
         "duration": 60,
@@ -358,3 +362,21 @@ def ranking_weights(profile: Optional[Dict[str, Any]] = None) -> Dict[str, float
         "trend": trend / total,
         "max_age_hours": float(ranking.get("max_age_hours", 24.0)),
     }
+
+
+def visual_mode(override: Optional[str] = None,
+                profile: Optional[Dict[str, Any]] = None) -> str:
+    """Resolve how this render should look: "stock" or "animated".
+
+    Precedence is request -> profile -> env, and it lives here so the three
+    cannot drift. Anything unrecognised falls back to stock, because a bad
+    value should cost a plainer video rather than a failed render.
+    """
+    for candidate in (override,
+                      (profile or store.active()).get("visuals", {}).get("mode"),
+                      settings.VISUAL_STYLE):
+        value = (candidate or "").strip().lower()
+        if value in ("stock", "animated"):
+            return value
+        # "auto" falls through to the next source rather than deciding.
+    return "stock"

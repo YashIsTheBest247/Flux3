@@ -319,6 +319,32 @@ class Settings(BaseSettings):
     # cheaper primary for real news subjects. Genblaze still records the
     # provenance manifest and owns B2 storage on every render regardless.
     IMAGE_PROVIDER: str = Field(default="auto", env="IMAGE_PROVIDER")
+
+    # How the scenes should LOOK.
+    #   stock    - photographs from Pexels/Unsplash (the default, and free)
+    #   animated - every scene generated as illustration/3D-render style art
+    #   auto     - follow the active profile's visuals.mode
+    # Animated implies generated visuals, so it forces IMAGE_PROVIDER=gemini
+    # for that render regardless of what the env says.
+    VISUAL_STYLE: str = Field(default="auto", env="VISUAL_STYLE")
+
+    # Prepended to every image prompt in animated mode. Kept as one string so a
+    # deployment can retune the look without touching code - swapping "Pixar" for
+    # "flat 2D vector" or "anime cel" changes the whole channel's identity.
+    ANIMATED_STYLE_PROMPT: str = Field(
+        default=(
+            "3D animated movie still, Pixar/DreamWorks style, stylised characters "
+            "with expressive faces, soft global illumination, shallow depth of "
+            "field, vivid saturated colour, cinematic composition"
+        ),
+        env="ANIMATED_STYLE_PROMPT",
+    )
+
+    # Slow push-in on every still. Without it a generated scene is a static
+    # frame held for eight seconds, which reads as a slideshow no matter how
+    # good the art is; with it the same frames read as animation.
+    KEN_BURNS: bool = Field(default=True, env="KEN_BURNS")
+    KEN_BURNS_ZOOM: float = Field(default=1.12, env="KEN_BURNS_ZOOM")
     # Genblaze image model. Routing is by id:
     #   gemini-*-image -> GeminiImageProvider (generateContent), needs GEMINI_API_KEY
     #   imagen-*       -> genblaze_google.ImagenProvider (predict); note Google has

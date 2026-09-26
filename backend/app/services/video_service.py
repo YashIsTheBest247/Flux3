@@ -236,11 +236,25 @@ class VideoGenerationService:
                 f"Generating script (target {content_duration}s narration "
                 f"for a {request.duration}s video)..."
             )
+            # How this render should look. Resolved once, here, so the script
+            # prompt and the image search cannot disagree about it.
+            from app.services.profiles_service import visual_mode
+            mode = visual_mode(getattr(request, "visual_style", None))
+            animated = mode == "animated"
+            logger.info("Visual mode: %s", mode)
+
+            # Assembly runs from a separate module that reads the environment,
+            # so the motion settings are published here rather than threaded
+            # through half a dozen signatures.
+            os.environ["FLUX_KEN_BURNS"] = "true" if settings.KEN_BURNS else "false"
+            os.environ["FLUX_KEN_BURNS_ZOOM"] = str(settings.KEN_BURNS_ZOOM)
+
             script = self.script_generator.generate_script(
                 topic=request.topic,
                 duration=content_duration,
                 key_points=request.key_points if request.key_points else None,
                 words_per_second=settings.WORDS_PER_SECOND,
+                animated=animated,
             )
             
             # Save script
@@ -273,12 +287,20 @@ class VideoGenerationService:
                 video_clips=settings.scene_video_clips_effective,
                 video_min_height=settings.SCENE_VIDEO_MIN_HEIGHT,
                 video_strict_place=settings.SCENE_VIDEO_STRICT_PLACE,
-                video_max_clips=settings.scene_video_max_clips_effective,
+                video_max_clips=0 if animated else settings.scene_video_max_clips_effective,
                 gemini_model=settings.IMAGE_GEN_MODEL,
                 aspect_ratio=settings.image_aspect_ratio_effective,
-                image_provider=settings.IMAGE_PROVIDER,
+                # Animated means every scene is drawn, so stock search is
+                # bypassed entirely - there is no photograph of a stylised
+                # character, and falling back to one mid-video would break the
+                # look worse than a missing scene would.
+                # "animated" tries generated art first and falls back to stock
+                # per scene. Pinning "gemini" meant a tier without image
+                # generation produced a video of black placeholder cards.
+                image_provider="animated" if animated else settings.IMAGE_PROVIDER,
                 genblaze_generator=self._genblaze_images,
                 source_log=image_sources,
+                style_prefix=settings.ANIMATED_STYLE_PROMPT if animated else "",
             )
             logger.info("Images generated successfully")
             # Report the sources that ACTUALLY served scenes, not the configured

@@ -137,7 +137,8 @@ async def health_check():
     b2 = storage.status()
     youtube = youtube_service.readiness()
     checks = {
-        "script_llm": bool(settings.GEMINI_API_KEY) or settings.SCRIPT_PROVIDER == "ollama",
+        "script_llm": bool(settings.gemini_api_keys_list)
+                      or settings.SCRIPT_PROVIDER == "ollama",
         "backblaze_b2": b2["available"],
         "genblaze": genblaze.enabled,
         "genblaze_sink": genblaze.status()["sink"] is not None,
