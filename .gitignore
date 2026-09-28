@@ -107,3 +107,6 @@ htmlcov/
 
 # Generated paste-block for Railway variables — contains real secrets.
 railway.env.filled.txt
+
+# Generated paste-block for Render variables — contains real secrets.
+render.env.filled.txt
