@@ -1,6 +1,7 @@
 # Flux — Creator Automation
 
 ### ▶ **Live app: https://flux3-production.up.railway.app**
+### **Render: https://flux-tstp.onrender.com/**
 
 [Health / readiness](https://flux3-production.up.railway.app/health) ·
 [API docs](https://flux3-production.up.railway.app/docs) ·
